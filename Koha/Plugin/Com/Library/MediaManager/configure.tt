@@ -1,0 +1,165 @@
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Media Asset Management (MAM) &ndash; Configuration</title>
+[% INCLUDE 'doc-head-close.inc' %]
+<style>
+    #mam-configure fieldset.rows ol > li {
+        display: grid;
+        grid-template-columns: 180px minmax(0, 1fr);
+        gap: 6px 16px;
+        align-items: start;
+        padding: 10px 0;
+    }
+    #mam-configure fieldset.rows label {
+        float: none;
+        width: auto;
+        margin: 0;
+        padding-top: 6px;
+        text-align: left;
+    }
+    #mam-configure fieldset.rows input {
+        grid-column: 2;
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        margin: 0;
+    }
+    #mam-configure fieldset.rows .hint {
+        grid-column: 2;
+        display: block;
+        float: none;
+        width: auto;
+        margin: 0;
+        padding: 0;
+    }
+    @media (max-width: 600px) {
+        #mam-configure fieldset.rows ol > li {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        #mam-configure fieldset.rows input,
+        #mam-configure fieldset.rows .hint {
+            grid-column: 1;
+        }
+    }
+</style>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+
+<div id="sub-header">
+    <nav id="breadcrumbs" aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/mainpage.pl" title="Home"><span class="visually-hidden-focusable">Home</span></a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool">Media Asset Management (MAM)</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                <a aria-disabled="true" tabindex="-1"><span>Configuration</span></a>
+            </li>
+        </ol>
+    </nav>
+</div>
+
+<div class="main container-fluid">
+    <div class="row">
+        <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
+
+            <h1><i class="fa fa-cog"></i> Media Asset Management (MAM) &ndash; Configuration</h1>
+
+            <form id="mam-configure" method="post" action="/cgi-bin/koha/plugins/run.pl">
+                <input type="hidden" name="class"  value="[% CLASS | html %]" />
+                <input type="hidden" name="method" value="configure" />
+                <input type="hidden" name="save"   value="1" />
+
+                <!-- ── MAM Connection ──────────────────────── -->
+                <fieldset class="rows">
+                    <legend>MAM Application</legend>
+                    <ol>
+                        <li>
+                            <label for="mam_url">Application URL:</label>
+                            <input type="url" id="mam_url" aria-describedby="mam_url_hint" name="mam_url" size="60"
+                                   value="[% mam_url | html %]"
+                                   placeholder="https://media.yourlibrary.com" required />
+                            <p class="hint" id="mam_url_hint">
+                                Full base URL of your Media Asset Management (MAM) instance
+                                (<strong>no</strong> trailing slash).
+                            </p>
+                        </li>
+                        <li>
+                            <label for="shared_secret">Shared Secret:</label>
+                            <input type="password" id="shared_secret" aria-describedby="shared_secret_hint" name="shared_secret" size="60"
+                                   value="[% shared_secret | html %]"
+                                   placeholder="Enter a long random string" required
+                                   autocomplete="off" />
+                            <p class="hint" id="shared_secret_hint">
+                                Must match the <code>KOHA_SSO_SECRET</code> value in your
+                                MAM <code>.env</code> file. Use at least 32 random characters.
+                            </p>
+                        </li>
+                    </ol>
+                </fieldset>
+
+                <!-- ── Security & Behaviour ────────────────────── -->
+                <fieldset class="rows">
+                    <legend>Security &amp; Behaviour</legend>
+                    <ol>
+                        <li>
+                            <label for="token_ttl">Token TTL (seconds):</label>
+                            <input type="number" id="token_ttl" aria-describedby="token_ttl_hint" name="token_ttl" size="10"
+                                   value="[% token_ttl | html %]"
+                                   min="30" max="3600" step="1" />
+                            <p class="hint" id="token_ttl_hint">
+                                How long the SSO token remains valid after generation.
+                                Default: <strong>300</strong> (5&nbsp;minutes). Lower is safer.
+                            </p>
+                        </li>
+                        <li>
+                            <label for="button_label">Toolbar Button Label:</label>
+                            <input type="text" id="button_label" aria-describedby="button_label_hint" name="button_label" size="40"
+                                   value="[% button_label | html %]"
+                                   placeholder="Upload Secure Media" />
+                            <p class="hint" id="button_label_hint">
+                                Text displayed on the button injected into the bibliographic
+                                detail toolbar.
+                            </p>
+                        </li>
+                        <li>
+                            <label for="allowed_permissions">Allowed Permissions:</label>
+                            <input type="text" id="allowed_permissions" aria-describedby="allowed_permissions_hint" name="allowed_permissions" size="60"
+                                   value="[% allowed_permissions | html %]"
+                                   placeholder="editcatalogue,superlibrarian" />
+                            <p class="hint" id="allowed_permissions_hint">
+                                Comma-separated list of Koha permission flags (e.g.
+                                <code>editcatalogue</code>, <code>tools</code>,
+                                <code>editauthorities</code>). Staff must hold <strong>at
+                                least one</strong> listed permission to use the Media Asset Management (MAM)
+                                button. Super-librarians always have access regardless of
+                                this setting.
+                            </p>
+                        </li>
+                    </ol>
+                </fieldset>
+
+                <!-- ── Actions ─────────────────────────────────── -->
+                <fieldset class="action mam-actions" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:16px 0;">
+                    <input type="submit" class="btn btn-primary" value="Save Configuration" />
+                    <a class="cancel" href="/cgi-bin/koha/plugins/plugins-home.pl">Cancel</a>
+                    <a class="btn btn-default btn-sm" style="margin-left:auto;"
+                       href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool">
+                        <i class="fa fa-dashboard"></i> Dashboard
+                    </a>
+                </fieldset>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+[% INCLUDE 'intranet-bottom.inc' %]

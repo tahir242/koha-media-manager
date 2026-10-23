@@ -1,165 +1,108 @@
+[% USE Koha %]
+[% SET mm_form_csrf = Koha.GenerateCSRF || mm_csrf_token %]
 [% INCLUDE 'doc-head-open.inc' %]
-<title>Media Asset Management (MAM) &ndash; Configuration</title>
+<title>Configuration &rsaquo; Media Asset Management (MAM) &rsaquo; Plugins &rsaquo; Koha</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<style>
-    #mam-configure fieldset.rows ol > li {
-        display: grid;
-        grid-template-columns: 180px minmax(0, 1fr);
-        gap: 6px 16px;
-        align-items: start;
-        padding: 10px 0;
-    }
-    #mam-configure fieldset.rows label {
-        float: none;
-        width: auto;
-        margin: 0;
-        padding-top: 6px;
-        text-align: left;
-    }
-    #mam-configure fieldset.rows input {
-        grid-column: 2;
-        box-sizing: border-box;
-        width: 100%;
-        min-width: 0;
-        max-width: 100%;
-        margin: 0;
-    }
-    #mam-configure fieldset.rows .hint {
-        grid-column: 2;
-        display: block;
-        float: none;
-        width: auto;
-        margin: 0;
-        padding: 0;
-    }
-    @media (max-width: 600px) {
-        #mam-configure fieldset.rows ol > li {
-            grid-template-columns: minmax(0, 1fr);
-        }
-        #mam-configure fieldset.rows input,
-        #mam-configure fieldset.rows .hint {
-            grid-column: 1;
-        }
-    }
-</style>
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_configure" class="plugins">
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb='Configuration' mm_parent=1 %]
 
-<div id="sub-header">
-    <nav id="breadcrumbs" aria-label="Breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/mainpage.pl" title="Home"><span class="visually-hidden-focusable">Home</span></a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool">Media Asset Management (MAM)</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page">
-                <a aria-disabled="true" tabindex="-1"><span>Configuration</span></a>
-            </li>
-        </ol>
-    </nav>
+<div class="main container-fluid mm-page">
+<h1>Media Asset Management (MAM) configuration</h1>
+<p class="mm-lead">Plugin version <strong>[% mm_version | html %]</strong>. Connects the Koha staff interface to the Digital Asset Management application.</p>
+
+[% IF saved %]<div class="alert alert-success" role="status"><i class="fa fa-check" aria-hidden="true"></i> Configuration saved.</div>[% END %]
+[% FOREACH error IN errors %]<div class="alert alert-danger" role="alert">[% error | html %]</div>[% END %]
+
+<form id="mm-configure" method="post" action="/cgi-bin/koha/plugins/run.pl">
+<input type="hidden" name="class" value="[% CLASS | html %]">
+<input type="hidden" name="method" value="configure">
+<input type="hidden" name="op" value="cud-save">
+<input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+
+<fieldset class="rows">
+    <legend>Application and identity</legend>
+    <ol>
+        <li>
+            <label for="mam_url" class="required">Application URL: </label>
+            <input id="mam_url" name="mam_url" type="text" inputmode="url" size="50" required value="[% mam_url | html %]" aria-describedby="mam_url_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="mam_url_hint">Address of the MAM application, e.g. https://dam.example.org</div>
+        </li>
+        <li>
+            <label for="insecure_http">Allow HTTP: </label>
+            <input id="insecure_http" name="insecure_http" type="checkbox" value="1" [% IF insecure_http %]checked[% END %] [% IF insecure_http_from_server %]disabled[% END %] aria-describedby="insecure_http_hint">
+            <div class="hint" id="insecure_http_hint">Test networks without HTTPS only (sign-in data is not encrypted). Leave unticked in production.[% IF insecure_http_from_server %] Currently forced on in koha-conf.xml.[% END %]</div>
+        </li>
+        <li>
+            <label for="instance_id" class="required">Instance ID: </label>
+            <input id="instance_id" name="instance_id" type="text" size="30" maxlength="64" required value="[% instance_id | html %]" aria-describedby="instance_id_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="instance_id_hint">Stable, unique identifier agreed with the application (its KOHA_INSTANCE_ID).</div>
+        </li>
+        <li>
+            <label for="client_id" class="required">Client ID: </label>
+            <input id="client_id" name="client_id" type="text" size="30" maxlength="64" required value="[% client_id | html %]" aria-describedby="client_id_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="client_id_hint">Must match the application's KOHA_SSO_CLIENT_ID.</div>
+        </li>
+        <li>
+            <label for="client_secret" [% UNLESS secret_configured %]class="required"[% END %]>Client secret: </label>
+            <input id="client_secret" name="client_secret" type="password" autocomplete="new-password" size="50" maxlength="64" aria-describedby="client_secret_hint">
+            [% UNLESS secret_configured %]<span class="required">Required</span>[% END %]
+            <div class="hint" id="client_secret_hint">[% IF secret_configured %]A secret is configured; leave blank to keep it.[% ELSE %]Required for the first configuration.[% END %] 64 lowercase hex characters (openssl rand -hex 32). Stored secrets are never displayed.</div>
+        </li>
+        <li>
+            <label for="rotation_grace" class="required">Rotation overlap: </label>
+            <input id="rotation_grace" name="rotation_grace" type="number" min="120" max="3600" required value="[% rotation_grace | html %]" aria-describedby="rotation_grace_hint"> seconds
+            <div class="hint" id="rotation_grace_hint">How long the previous secret is still accepted after a change (120–3600).</div>
+        </li>
+        <li>
+            <label for="code_ttl" class="required">Code lifetime: </label>
+            <input id="code_ttl" name="code_ttl" type="number" min="30" max="120" required value="[% code_ttl | html %]" aria-describedby="code_ttl_hint"> seconds
+            <div class="hint" id="code_ttl_hint">Validity of each one-time authorization code (30–120).</div>
+        </li>
+    </ol>
+</fieldset>
+
+<fieldset class="rows">
+    <legend>Staff access and operations</legend>
+    <ol>
+        <li>
+            <label for="staff_policy">Allowed staff: </label>
+            <select id="staff_policy" name="staff_policy" aria-describedby="staff_policy_hint">
+                <option value="cataloguers" [% IF staff_policy == 'cataloguers' %]selected[% END %]>Cataloguers and superlibrarians</option>
+                <option value="superlibrarians" [% IF staff_policy == 'superlibrarians' %]selected[% END %]>Superlibrarians only</option>
+            </select>
+            <div class="hint" id="staff_policy_hint">Cataloguers need catalogue, plugins &rsaquo; tool and editcatalogue &rsaquo; edit_catalogue. Configuration and audit access require superlibrarian.</div>
+        </li>
+        <li>
+            <label for="button_label" class="required">Toolbar label: </label>
+            <input id="button_label" name="button_label" type="text" size="30" maxlength="80" required value="[% button_label | html %]" aria-describedby="button_label_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="button_label_hint">Text of the button on the bibliographic record toolbar.</div>
+        </li>
+        <li>
+            <label for="health_ips">Health check IPs: </label>
+            <input id="health_ips" name="health_ips" type="text" size="50" value="[% health_ips | html %]" aria-describedby="health_ips_hint">
+            <div class="hint" id="health_ips_hint">Comma-separated IPs of the application server for the connection test. Blank disables network diagnostics. Loopback and link-local addresses are not allowed.</div>
+        </li>
+        <li>
+            <label for="audit_retention" class="required">Audit retention: </label>
+            <input id="audit_retention" name="audit_retention" type="number" min="1" max="3650" required value="[% audit_retention | html %]" aria-describedby="audit_retention_hint"> days
+            <div class="hint" id="audit_retention_hint">Applied by the daily maintenance command; nothing is deleted during staff requests.</div>
+        </li>
+    </ol>
+</fieldset>
+
+<fieldset class="action mm-form-actions">
+    <button class="btn btn-primary" type="submit"><i class="fa fa-save" aria-hidden="true"></i> Save configuration</button>
+    <a class="cancel" href="/cgi-bin/koha/plugins/plugins-home.pl">Cancel</a>
+    <a class="btn btn-default mm-push-right" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool"><i class="fa fa-tachometer" aria-hidden="true"></i> Dashboard</a>
+</fieldset>
+</form>
 </div>
-
-<div class="main container-fluid">
-    <div class="row">
-        <div class="col-md-10 col-md-offset-1 col-lg-8 col-lg-offset-2">
-
-            <h1><i class="fa fa-cog"></i> Media Asset Management (MAM) &ndash; Configuration</h1>
-
-            <form id="mam-configure" method="post" action="/cgi-bin/koha/plugins/run.pl">
-                <input type="hidden" name="class"  value="[% CLASS | html %]" />
-                <input type="hidden" name="method" value="configure" />
-                <input type="hidden" name="save"   value="1" />
-
-                <!-- ── MAM Connection ──────────────────────── -->
-                <fieldset class="rows">
-                    <legend>MAM Application</legend>
-                    <ol>
-                        <li>
-                            <label for="mam_url">Application URL:</label>
-                            <input type="url" id="mam_url" aria-describedby="mam_url_hint" name="mam_url" size="60"
-                                   value="[% mam_url | html %]"
-                                   placeholder="https://media.yourlibrary.com" required />
-                            <p class="hint" id="mam_url_hint">
-                                Full base URL of your Media Asset Management (MAM) instance
-                                (<strong>no</strong> trailing slash).
-                            </p>
-                        </li>
-                        <li>
-                            <label for="shared_secret">Shared Secret:</label>
-                            <input type="password" id="shared_secret" aria-describedby="shared_secret_hint" name="shared_secret" size="60"
-                                   value="[% shared_secret | html %]"
-                                   placeholder="Enter a long random string" required
-                                   autocomplete="off" />
-                            <p class="hint" id="shared_secret_hint">
-                                Must match the <code>KOHA_SSO_SECRET</code> value in your
-                                MAM <code>.env</code> file. Use at least 32 random characters.
-                            </p>
-                        </li>
-                    </ol>
-                </fieldset>
-
-                <!-- ── Security & Behaviour ────────────────────── -->
-                <fieldset class="rows">
-                    <legend>Security &amp; Behaviour</legend>
-                    <ol>
-                        <li>
-                            <label for="token_ttl">Token TTL (seconds):</label>
-                            <input type="number" id="token_ttl" aria-describedby="token_ttl_hint" name="token_ttl" size="10"
-                                   value="[% token_ttl | html %]"
-                                   min="30" max="3600" step="1" />
-                            <p class="hint" id="token_ttl_hint">
-                                How long the SSO token remains valid after generation.
-                                Default: <strong>300</strong> (5&nbsp;minutes). Lower is safer.
-                            </p>
-                        </li>
-                        <li>
-                            <label for="button_label">Toolbar Button Label:</label>
-                            <input type="text" id="button_label" aria-describedby="button_label_hint" name="button_label" size="40"
-                                   value="[% button_label | html %]"
-                                   placeholder="Upload Secure Media" />
-                            <p class="hint" id="button_label_hint">
-                                Text displayed on the button injected into the bibliographic
-                                detail toolbar.
-                            </p>
-                        </li>
-                        <li>
-                            <label for="allowed_permissions">Allowed Permissions:</label>
-                            <input type="text" id="allowed_permissions" aria-describedby="allowed_permissions_hint" name="allowed_permissions" size="60"
-                                   value="[% allowed_permissions | html %]"
-                                   placeholder="editcatalogue,superlibrarian" />
-                            <p class="hint" id="allowed_permissions_hint">
-                                Comma-separated list of Koha permission flags (e.g.
-                                <code>editcatalogue</code>, <code>tools</code>,
-                                <code>editauthorities</code>). Staff must hold <strong>at
-                                least one</strong> listed permission to use the Media Asset Management (MAM)
-                                button. Super-librarians always have access regardless of
-                                this setting.
-                            </p>
-                        </li>
-                    </ol>
-                </fieldset>
-
-                <!-- ── Actions ─────────────────────────────────── -->
-                <fieldset class="action mam-actions" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:16px 0;">
-                    <input type="submit" class="btn btn-primary" value="Save Configuration" />
-                    <a class="cancel" href="/cgi-bin/koha/plugins/plugins-home.pl">Cancel</a>
-                    <a class="btn btn-default btn-sm" style="margin-left:auto;"
-                       href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool">
-                        <i class="fa fa-dashboard"></i> Dashboard
-                    </a>
-                </fieldset>
-            </form>
-
-        </div>
-    </div>
-</div>
-
 [% INCLUDE 'intranet-bottom.inc' %]

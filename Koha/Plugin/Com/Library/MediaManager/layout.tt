@@ -1,0 +1,34 @@
+[%# Small page-level additions only. Forms use Koha's native "fieldset.rows" layout
+    (right-aligned label, input, "Required" marker, div.hint underneath), so they look and
+    behave like every other Koha administration page. %]
+<style nonce="[% Koha.CSPNonce | html %]">
+    .mm-page { max-width: 1100px; padding-top: 1rem; padding-bottom: 2rem; }
+    .mm-page h1 { margin: 0 0 .5rem; }
+    .mm-page .mm-lead { color: #555; margin-bottom: 1.25rem; }
+    .mm-page .alert h2 { font-size: 1.15rem; margin: 0 0 .4rem; }
+    .mm-page .alert p:last-child, .mm-page .alert form:last-child { margin-bottom: 0; }
+    .mm-page .alert form { margin-top: .6rem; }
+    .mm-page fieldset.rows input[type="number"] { width: 7rem; }
+    .mm-page fieldset.rows select { min-width: 18rem; }
+    .mm-page fieldset.rows div.hint { max-width: 46rem; }
+    .mm-page .mm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; margin: 1rem 0; }
+    .mm-page .mm-actions form { margin: 0; }
+    .mm-page .mm-status th { width: 16rem; }
+    .mm-page .mm-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem 1rem; margin: 1rem 0; }
+    .mm-page .mm-filter-field label { display: block; font-weight: bold; margin-bottom: .3rem; }
+    .mm-page .mm-filter-field input { width: 22rem; max-width: 100%; }
+    .mm-page .mm-filter-field .hint { margin: .3rem 0 0; }
+    .mm-page .mm-pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; margin: 1rem 0 0; }
+    .mm-page .mm-pager .pagination { margin: 0; }
+    .mm-page .mm-pager-info { color: #555; }
+    .mm-page .mm-details { max-width: 22rem; overflow-wrap: anywhere; font-size: .9em; color: #555; }
+    .mm-page .mm-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+    .mm-page .mm-form-actions .mm-push-right { margin-left: auto; }
+    @media (max-width: 768px) {
+        /* Koha's floated 10rem labels do not fit narrow screens: stack them. */
+        .mm-page fieldset.rows label { float: none; display: block; width: auto; text-align: left; margin: 0 0 .25rem; }
+        .mm-page fieldset.rows div.hint { margin-left: 0; }
+        .mm-page fieldset.rows input[type="text"], .mm-page fieldset.rows input[type="password"] { width: 100%; }
+        .mm-page .mm-status th { width: auto; }
+    }
+</style>

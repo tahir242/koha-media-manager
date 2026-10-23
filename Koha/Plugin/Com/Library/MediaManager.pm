@@ -1,557 +1,567 @@
 package Koha::Plugin::Com::Library::MediaManager;
-
-## ═══════════════════════════════════════════════════════════════════
-##  Media Asset Management (MAM) – Koha Plugin
-##
-##  Provides HMAC-signed SSO from the Koha staff interface to a
-##  Media Asset Management (MAM) application. Injects "Upload Secure Media"
-##  buttons on bibliographic detail pages, logs every redirect for
-##  audit purposes, and includes a health-check dashboard.
-##
-##  Compatible with Koha 22.11 – 26.05+
-## ═══════════════════════════════════════════════════════════════════
-
 use Modern::Perl;
 use base qw(Koha::Plugins::Base);
-
 use C4::Context;
-use C4::Auth qw( haspermission );
-use Digest::SHA qw( hmac_sha256_hex );
-use URI::Escape qw( uri_escape_utf8 );
-use HTTP::Tiny;
+use C4::Auth qw(haspermission check_cookie_auth);
+use CGI;
+use Koha::Biblios;
+use Koha::Patrons;
+use Koha::Token;
+use JSON::PP qw(encode_json decode_json);
+use Digest::SHA qw(sha256_hex);
+use POSIX qw(strftime);
+use URI::Escape qw(uri_escape);
+use Koha::Plugin::Com::Library::MediaManager::Security qw(valid_id validate_config random_hex secret_hash secret_matches html_escape insecure_http_enabled);
+use Koha::Plugin::Com::Library::MediaManager::Store;
+use Koha::Plugin::Com::Library::MediaManager::Health;
 
-our $VERSION = "1.0.0";
-
+our $VERSION = '2.3.0';
 our $metadata = {
-    name            => 'Media Asset Management (MAM)',
-    author          => 'Tahir Ali Channa',
-    description     => 'SSO integration with the Media Asset Management (MAM) application. '
-                     . 'Adds secure upload buttons to bibliographic detail pages, '
-                     . 'handles HMAC-signed authentication, and provides audit logging.',
-    date_authored   => '2026-10-21',
-    date_updated    => '2026-10-21',
-    minimum_version => '22.1100000',
-    maximum_version => undef,
-    version         => $VERSION,
+    name=>'Media Asset Management (MAM)', author=>'Tahir Ali Channa',
+    description=>'Adds an "Upload Secure Media" button to bibliographic records. One click signs staff in to the '
+        .'SIUT Digital Asset Management application (no second password), where they upload, review and publish '
+        .'digital files for that record.',
+    date_authored=>'2026-10-21', date_updated=>'2026-10-24',
+    minimum_version=>'22.1100000', maximum_version=>undef, version=>$VERSION,
 };
-
-# ─────────────────────────────────────────────────────────────────────
-#  Constructor
-# ─────────────────────────────────────────────────────────────────────
+my @settings = qw(mam_url instance_id client_id code_ttl rotation_grace button_label staff_policy health_ips audit_retention);
 
 sub new {
-    my ( $class, $args ) = @_;
-
-    $args->{'metadata'}            = $metadata;
-    $args->{'metadata'}->{'class'} = $class;
-
-    my $self = $class->SUPER::new($args);
-    return $self;
+    my ($class,$args) = @_;
+    $args ||= {};
+    $args->{metadata} = { %$metadata, class=>$class };
+    return $class->SUPER::new($args);
 }
 
-# ─────────────────────────────────────────────────────────────────────
-#  Lifecycle Hooks
-# ─────────────────────────────────────────────────────────────────────
+sub _table { return $_[0]->get_qualified_table_name($_[1]); }
+sub _db { return C4::Context->dbh; }
 
-sub install {
-    my ( $self, $args ) = @_;
+sub install { return $_[0]->_migrate; }
+sub upgrade { return $_[0]->_migrate; }
 
-    my $dbh       = C4::Context->dbh;
-    my $log_table = $self->get_qualified_table_name('log');
-
-    $dbh->do(qq{
-        CREATE TABLE IF NOT EXISTS `$log_table` (
-            `id`             INT AUTO_INCREMENT PRIMARY KEY,
-            `userid`         VARCHAR(75)  NOT NULL,
-            `borrowernumber` INT          DEFAULT NULL,
-            `biblionumber`   INT          DEFAULT NULL,
-            `action`         VARCHAR(50)  NOT NULL DEFAULT 'sso_redirect',
-            `ip_address`     VARCHAR(45)  DEFAULT NULL,
-            `status`         VARCHAR(20)  NOT NULL DEFAULT 'success',
-            `details`        TEXT         DEFAULT NULL,
-            `created_at`     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-            INDEX `idx_mm_userid`       (`userid`),
-            INDEX `idx_mm_biblionumber` (`biblionumber`),
-            INDEX `idx_mm_created_at`   (`created_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    }) or warn "MediaManager install: could not create log table – $DBI::errstr";
-
-    # Sensible defaults (only written on first install)
-    $self->store_data({
-        token_ttl           => '300',
-        button_label        => 'Upload Secure Media',
-        allowed_permissions => 'editcatalogue,superlibrarian',
-    });
-
-    return 1;
+sub _migrate {
+    my ($self) = @_;
+    my $dbh = $self->_db;
+    my $log = $self->_table('log');
+    # Keep the v1 audit schema and records intact. Structured details hold correlation IDs.
+    $dbh->do(qq{CREATE TABLE IF NOT EXISTS $log (
+        id INT AUTO_INCREMENT PRIMARY KEY, userid VARCHAR(75) NOT NULL,
+        borrowernumber INT DEFAULT NULL, biblionumber INT DEFAULT NULL,
+        action VARCHAR(50) NOT NULL DEFAULT 'unknown', ip_address VARCHAR(45),
+        status VARCHAR(20) NOT NULL DEFAULT 'success', details TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_mm_created_at (created_at), INDEX idx_mm_userid (userid),
+        INDEX idx_mm_biblionumber (biblionumber)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci}) or die 'Audit schema unavailable';
+    my $codes = $self->_table('codes');
+    $dbh->do(qq{CREATE TABLE IF NOT EXISTS $codes (
+        code_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+        patron_id INT NOT NULL, biblio_id INT NOT NULL, branch VARCHAR(10) NOT NULL,
+        issuer VARCHAR(64) NOT NULL, audience VARCHAR(64) NOT NULL, client_id VARCHAR(64) NOT NULL,
+        issued_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, consumed_at BIGINT NULL,
+        correlation_id CHAR(64) NOT NULL, browser_state VARCHAR(128) NOT NULL, INDEX mm_expiry (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin}) or die 'Code schema unavailable';
+    my $requests = $self->_table('requests');
+    $dbh->do(qq{CREATE TABLE IF NOT EXISTS $requests (
+        request_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+        session_hash CHAR(64) NOT NULL, patron_id INT NOT NULL, biblio_id INT NOT NULL,
+        branch VARCHAR(10) NOT NULL, binding CHAR(64) NOT NULL, expires_at BIGINT NOT NULL,
+        consumed_at BIGINT NULL, correlation_id CHAR(64) NOT NULL, INDEX mm_request_expiry (expires_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin}) or die 'Initiation schema unavailable';
+    my $rates = $self->_table('rates');
+    $dbh->do(qq{CREATE TABLE IF NOT EXISTS $rates (
+        bucket CHAR(64) CHARACTER SET ascii NOT NULL, window_id BIGINT NOT NULL,
+        attempts INT NOT NULL, PRIMARY KEY (bucket,window_id), INDEX mm_window (window_id)
+    ) ENGINE=InnoDB}) or die 'Rate schema unavailable';
+    return $self->_defaults;
 }
 
-sub upgrade {
-    my ( $self, $args ) = @_;
-
-    my $dbh       = C4::Context->dbh;
-    my $log_table = $self->get_qualified_table_name('log');
-
-    # Ensure the log table exists when upgrading an existing installation.
-    $dbh->do(qq{
-        CREATE TABLE IF NOT EXISTS `$log_table` (
-            `id`             INT AUTO_INCREMENT PRIMARY KEY,
-            `userid`         VARCHAR(75)  NOT NULL,
-            `borrowernumber` INT          DEFAULT NULL,
-            `biblionumber`   INT          DEFAULT NULL,
-            `action`         VARCHAR(50)  NOT NULL DEFAULT 'sso_redirect',
-            `ip_address`     VARCHAR(45)  DEFAULT NULL,
-            `status`         VARCHAR(20)  NOT NULL DEFAULT 'success',
-            `details`        TEXT         DEFAULT NULL,
-            `created_at`     TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
-            INDEX `idx_mm_userid`       (`userid`),
-            INDEX `idx_mm_biblionumber` (`biblionumber`),
-            INDEX `idx_mm_created_at`   (`created_at`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-    });
-
-    # Back-fill defaults that may not exist in older installs
-    $self->store_data({ token_ttl           => '300' })
-        unless defined $self->retrieve_data('token_ttl');
-    $self->store_data({ button_label        => 'Upload Secure Media' })
-        unless defined $self->retrieve_data('button_label');
-    $self->store_data({ allowed_permissions => 'editcatalogue,superlibrarian' })
-        unless defined $self->retrieve_data('allowed_permissions');
-
-    $self->store_data({ last_upgraded => '' . localtime() });
-
+sub _defaults {
+    my ($self) = @_;
+    my %defaults = (
+        protocol=>'code-v2', code_ttl=>'60', rotation_grace=>'300',
+        audit_retention=>'90', button_label=>'Upload Secure Media',
+        staff_policy=>'cataloguers', health_ips=>'', schema_version=>'2',
+    );
+    for my $key (keys %defaults) {
+        $self->store_data({$key=>$defaults{$key}}) unless defined $self->retrieve_data($key);
+    }
+    # Existing mam_url, shared_secret and allowed_permissions are preserved for rollback.
+    # Legacy secrets are never promoted to v2 authentication credentials.
     return 1;
 }
 
 sub uninstall {
-    my ( $self, $args ) = @_;
-
-    my $dbh       = C4::Context->dbh;
-    my $log_table = $self->get_qualified_table_name('log');
-
-    $dbh->do("DROP TABLE IF EXISTS `$log_table`");
-
-    # Rows in plugin_data for this class are deleted automatically by
-    # Koha core on uninstall – no manual cleanup required.
-
+    my ($self) = @_;
+    # Retain historical audits, invalidate pending grants and remove rate state.
+    for my $name (qw(codes requests rates)) {
+        my $table = $self->_table($name);
+        $self->_db->do("DROP TABLE IF EXISTS $table") or die 'Uninstall failed';
+    }
     return 1;
 }
 
-# ─────────────────────────────────────────────────────────────────────
-#  Configuration
-# ─────────────────────────────────────────────────────────────────────
+sub _config {
+    my ($self) = @_;
+    return { map { $_=>($self->retrieve_data($_) // '') } @settings };
+}
+
+sub _ready {
+    my ($self) = @_;
+    my (undef,$errors) = validate_config($self->_config,{allow_http=>$self->_insecure_http});
+    return !@$errors && ($self->retrieve_data('protocol') // '') eq 'code-v2'
+        && ($self->retrieve_data('client_secret_hash') // '') =~ /\A[0-9a-f]{64}\z/;
+}
+
+sub _patron {
+    my ($self,$id) = @_;
+    return unless valid_id($id);
+    my $p = Koha::Patrons->find($id);
+    return unless $p && $p->userid && !$p->account_locked && !$p->is_expired;
+    return if $p->lost || $p->gonenoaddress || $p->is_debarred;
+    return $p;
+}
+
+sub _capabilities {
+    my ($self,$p) = @_;
+    return [] unless $p && haspermission($p->userid,{catalogue=>1})
+        && haspermission($p->userid,{plugins=>'tool'});
+    return [qw(media.access media.upload media.manage media.admin)] if ($p->flags // 0) & 1;
+    return [] unless ($self->retrieve_data('staff_policy') // '') eq 'cataloguers';
+    return [] unless haspermission($p->userid,{editcatalogue=>'edit_catalogue'});
+    return [qw(media.access media.upload)];
+}
+
+sub _staff {
+    my ($self,$cgi) = @_;
+    my $cookie = $cgi->cookie('CGISESSID') // '';
+    return unless $cookie;
+    my ($status,$session) = check_cookie_auth($cookie,{catalogue=>1});
+    return unless $status eq 'ok' && $session;
+    # An OPAC session must not be promoted into a staff authorization.
+    return unless ($session->param('interface') // '') eq 'intranet';
+    my $p = $self->_patron($session->param('number'));
+    return unless $p;
+    my $env = C4::Context->userenv;
+    return unless $env && ($env->{number} // '') eq $p->borrowernumber;
+    return ($p,$session);
+}
+
+sub _admin {
+    my ($self,$cgi) = @_;
+    my ($p) = $self->_staff($cgi);
+    return $p && (($p->flags // 0) & 1);
+}
+
+sub _csrf {
+    my ($self,$cgi) = @_;
+    my $session_id = scalar $cgi->cookie('CGISESSID');
+    die 'Staff session required for CSRF token' unless defined($session_id) && length($session_id);
+    my $token = Koha::Token->new->generate_csrf({session_id=>$session_id});
+    die 'Could not generate staff CSRF token' unless defined($token) && length($token);
+    return $token;
+}
+
+sub _form_params {
+    my ($self,$cgi) = @_;
+    # Koha.GenerateCSRF reads sessionID from the Template Toolkit stash.
+    # The plugin-specific fallback supports older Koha without that TT method.
+    return (
+        sessionID => scalar $cgi->cookie('CGISESSID'),
+        mm_csrf_token => $self->_csrf($cgi),
+        # Shown on the pages so administrators can confirm which code Koha is running.
+        mm_version => $VERSION,
+    );
+}
+sub _valid_post {
+    my ($self,$cgi) = @_;
+    return $cgi->request_method eq 'POST' && Koha::Token->new->check_csrf({
+        session_id=>scalar $cgi->cookie('CGISESSID'), token=>scalar $cgi->param('csrf_token'),
+    });
+}
+sub _https { return ($ENV{HTTPS} // '') =~ /\A(?:on|1)\z/i; }
+# TEST-ONLY HTTP mode: enabled by a superlibrarian with the button on the Configure page
+# (plugin_data insecure_http=1), or by the server operator in koha-conf.xml.
+sub _insecure_http {
+    my ($self) = @_;
+    return (insecure_http_enabled() || ($self->retrieve_data('insecure_http') // '') eq '1') ? 1 : 0;
+}
+# HTTPS, or the TEST-ONLY HTTP mode (see docs/CONFIGURATION.md).
+sub _transport_ok { my ($self) = @_; return _https() || $self->_insecure_http; }
+
+sub _audit {
+    my ($self,$action,$status,$context,$details) = @_;
+    $context ||= {};
+    my $table = $self->_table('log');
+    my $safe = { correlation_id=>$context->{correlation_id} // random_hex(), %{ $details || {} } };
+    $self->_db->do(
+        "INSERT INTO $table (userid,borrowernumber,biblionumber,action,ip_address,status,details) VALUES (?,?,?,?,?,?,?)",
+        undef, $context->{userid} // '', $context->{patron_id}, $context->{biblio_id},
+        $action, substr($context->{source_ip} // $ENV{REMOTE_ADDR} // '',0,45), $status, encode_json($safe),
+    ) or die 'Audit write failed';
+}
+
+sub _rate {
+    my ($self,$key,$limit) = @_;
+    my $t = $self->_table('rates');
+    my $dbh = $self->_db;
+    my ($window) = $dbh->selectrow_array('SELECT FLOOR(UNIX_TIMESTAMP()/60)');
+    my $bucket = sha256_hex($key);
+    $dbh->do("INSERT INTO $t (bucket,window_id,attempts) VALUES (?,?,1) ON DUPLICATE KEY UPDATE attempts=attempts+1",
+        undef,$bucket,$window) or die 'Rate storage unavailable';
+    my ($count) = $dbh->selectrow_array("SELECT attempts FROM $t WHERE bucket=? AND window_id=?",undef,$bucket,$window);
+    return $count <= $limit;
+}
 
 sub configure {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-
-    if ( scalar $cgi->param('save') ) {
-        $self->store_data({
-            mam_url         => scalar $cgi->param('mam_url'),
-            shared_secret       => scalar $cgi->param('shared_secret'),
-            token_ttl           => scalar $cgi->param('token_ttl')           || '300',
-            button_label        => scalar $cgi->param('button_label')        || 'Upload Secure Media',
-            allowed_permissions => scalar $cgi->param('allowed_permissions') || 'editcatalogue,superlibrarian',
-        });
-        $self->go_home();
-        return;
-    }
-
-    my $template = $self->get_template({ file => 'configure.tt' });
-    $template->param(
-        mam_url         => $self->retrieve_data('mam_url')         // '',
-        shared_secret       => $self->retrieve_data('shared_secret')       // '',
-        token_ttl           => $self->retrieve_data('token_ttl')           // '300',
-        button_label        => $self->retrieve_data('button_label')        // 'Upload Secure Media',
-        allowed_permissions => $self->retrieve_data('allowed_permissions') // 'editcatalogue,superlibrarian',
-        CLASS               => $self->{'metadata'}->{'class'},
-    );
-    $self->output_html( $template->output() );
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  UI Injection Hooks
-# ─────────────────────────────────────────────────────────────────────
-
-## JavaScript hook – universally supported across Koha versions.
-## Injects the toolbar button via DOM manipulation; skips if the native
-## toolbar-button hook (below) already rendered one.
-
-sub intranet_js {
     my ($self) = @_;
+    my $cgi = $self->{cgi};
+    return $self->_error('Access denied','Only superlibrarians may administer this integration.',403) unless $self->_admin($cgi);
 
-    my $class        = $self->{'metadata'}->{'class'};
-    my $button_label = $self->retrieve_data('button_label') // 'Upload Secure Media';
-
-    # Sanitise for safe embedding inside a JS string literal
-    $button_label =~ s/&/\&amp;/g;
-    $button_label =~ s/</\&lt;/g;
-    $button_label =~ s/>/\&gt;/g;
-    $button_label =~ s/'/\\'/g;
-
-    return <<"JAVASCRIPT";
-<script>
-\$(document).ready(function(){
-    /* Only act on the catalogue detail page */
-    if(window.location.pathname.indexOf('/catalogue/detail.pl')===-1) return;
-
-    /* If the native toolbar-button hook already rendered our button, bail */
-    if(document.getElementById('media-manager-btn')) return;
-
-    var urlParams = new URLSearchParams(window.location.search);
-    var biblioId  = urlParams.get('biblionumber');
-    if(!biblioId) return;
-
-    var btn = '<a class="btn btn-default btn-sm" id="media-manager-btn" '
-        + 'href="/cgi-bin/koha/plugins/run.pl?class=$class'
-        + '&method=tool&op=redirect&biblionumber=' + encodeURIComponent(biblioId) + '">'
-        + '<i class="fa fa-upload"></i> $button_label</a>';
-
-    \$('#toolbar').append(btn);
-});
-</script>
-JAVASCRIPT
+    my $config = $self->_config;
+    my $allow_http = $self->_insecure_http;
+    my @errors;
+    my $saved = 0;
+    if ($cgi->request_method eq 'POST') {
+        return $self->_error('Invalid request','CSRF validation failed.',403) unless $self->_valid_post($cgi);
+        # "Allow HTTP (test networks only)" checkbox. Saving over plain HTTP requires it,
+        # so running without HTTPS is always a conscious, audited choice.
+        $allow_http = (scalar($cgi->param('insecure_http')) // '') eq '1' || insecure_http_enabled() ? 1 : 0;
+        my %input = map { $_=>scalar($cgi->param($_)) // '' } @settings;
+        my ($clean,$validation) = validate_config(\%input,{allow_http=>$allow_http});
+        @errors = @$validation;
+        push @errors,'Koha is opened over plain HTTP: tick "Allow HTTP" (test networks only) or use HTTPS.'
+            unless _https() || $allow_http;
+        my $secret = scalar($cgi->param('client_secret')) // '';
+        push @errors,'Replacement secret must be 64 lowercase hexadecimal characters generated from 32 random bytes.'
+            if length($secret) && $secret !~ /\A[0-9a-f]{64}\z/;
+        push @errors,'A new client secret is required for first configuration.'
+            unless length($secret) || $self->retrieve_data('client_secret_hash');
+        if (!@errors) {
+            my $dbh = $self->_db;
+            eval {
+                $dbh->begin_work or die 'Transaction unavailable';
+                # Serialize administrator saves and rotations on a stable plugin_data row.
+                $dbh->selectrow_array('SELECT plugin_value FROM plugin_data WHERE plugin_class=? AND plugin_key=? FOR UPDATE',
+                    undef,ref($self),'schema_version');
+                if (length($secret)) {
+                    my ($now) = $dbh->selectrow_array('SELECT UNIX_TIMESTAMP()');
+                    $self->store_data({
+                        previous_secret_hash=>$self->retrieve_data('client_secret_hash') // '',
+                        previous_secret_until=>$now+$clean->{rotation_grace},
+                        client_secret_hash=>secret_hash($secret),
+                    });
+                }
+                my $was_http = ($self->retrieve_data('insecure_http') // '') eq '1' ? 1 : 0;
+                $self->store_data({%$clean, insecure_http=>$allow_http ? '1' : '0'});
+                my ($p) = $self->_staff($cgi);
+                my $who = {userid=>$p->userid,patron_id=>$p->borrowernumber};
+                $self->_audit('configuration_updated','success',$who,{});
+                $self->_audit($allow_http ? 'insecure_http_enabled' : 'insecure_http_disabled','success',$who,{})
+                    if $was_http != $allow_http;
+                $dbh->commit or die 'Commit failed';
+                1;
+            } or do {
+                eval { $dbh->rollback unless $dbh->{AutoCommit} };
+                push @errors,'Configuration could not be saved.';
+            };
+            $saved = !@errors;
+        }
+        $config = $clean;
+    }
+    my $template = $self->get_template({file=>'configure.tt'});
+    $template->param(%$config, errors=>\@errors, saved=>$saved, $self->_form_params($cgi),
+        insecure_http=>$allow_http, insecure_http_from_server=>insecure_http_enabled(), https=>_https() ? 1:0,
+        secret_configured=>$self->retrieve_data('client_secret_hash') ? 1:0);
+    $self->output_html($template->output,undef,{force_no_caching=>1});
 }
-
-## Native toolbar-button hook – available in Koha >= 23.11.
-## Koha calls this automatically when rendering the biblio detail toolbar
-## and injects the returned HTML. The id="media-manager-btn" attribute
-## prevents the intranet_js fallback from adding a duplicate.
 
 sub intranet_catalog_biblio_enhancements_toolbar_button {
-    my ( $self, $args ) = @_;
-
-    my $biblionumber = $args->{'biblionumber'};
-    return '' unless $biblionumber;
-
-    my $class        = $self->{'metadata'}->{'class'};
-    my $button_label = $self->retrieve_data('button_label') // 'Upload Secure Media';
-
-    # HTML-escape the label
-    $button_label =~ s/&/&amp;/g;
-    $button_label =~ s/</&lt;/g;
-    $button_label =~ s/>/&gt;/g;
-    $button_label =~ s/"/&quot;/g;
-
-    my $url = '/cgi-bin/koha/plugins/run.pl?class=' . uri_escape_utf8($class)
-            . '&method=tool&op=redirect&biblionumber='  . uri_escape_utf8($biblionumber);
-
-    return qq{
-        <a class="btn btn-default btn-sm" id="media-manager-btn" href="$url">
-            <i class="fa fa-upload" aria-hidden="true"></i> $button_label
-        </a>
-    };
+    my ($self) = @_;
+    return '' unless $self->_ready && $self->_transport_ok;
+    # Verified upstream: TT calls this hook without arguments or a CGI object.
+    my $cgi = CGI->new;
+    my ($p) = $self->_staff($cgi);
+    return '' unless $p && @{$self->_capabilities($p)};
+    my $id = scalar $cgi->param('biblionumber');
+    return '' unless valid_id($id) && Koha::Biblios->find($id);
+    my $csrf = html_escape($self->_csrf($cgi));
+    my $label = html_escape($self->retrieve_data('button_label'));
+    my $class = html_escape(ref $self);
+    return qq{<div class="btn-group" id="media-manager-action"><form method="post" action="/cgi-bin/koha/plugins/run.pl" style="display:inline">
+<input type="hidden" name="class" value="$class"><input type="hidden" name="method" value="tool">
+<input type="hidden" name="op" value="cud-authorize"><input type="hidden" name="csrf_token" value="$csrf">
+<input type="hidden" name="biblionumber" value="$id">
+<button class="btn btn-default" type="submit"><i class="fa fa-upload" aria-hidden="true"></i> $label</button></form></div>};
 }
-
-# ─────────────────────────────────────────────────────────────────────
-#  Tool Entry-Point (Router)
-# ─────────────────────────────────────────────────────────────────────
 
 sub tool {
-    my ( $self, $args ) = @_;
-    my $cgi = $self->{'cgi'};
-    my $op  = scalar( $cgi->param('op') ) // '';
-
-    if    ( $op eq 'redirect' )        { $self->_handle_sso_redirect($cgi) }
-    elsif ( $op eq 'test_connection' ) { $self->_handle_connection_test($cgi) }
-    else                               { $self->_show_dashboard($cgi) }
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: SSO Redirect
-# ─────────────────────────────────────────────────────────────────────
-
-sub _handle_sso_redirect {
-    my ( $self, $cgi ) = @_;
-
-    my $mam_url   = $self->retrieve_data('mam_url')         // '';
-    my $secret        = $self->retrieve_data('shared_secret')       // '';
-    my $token_ttl     = $self->retrieve_data('token_ttl')           // 300;
-    my $allowed_perms = $self->retrieve_data('allowed_permissions') // 'editcatalogue,superlibrarian';
-
-    # ── Guard: plugin must be configured ─────────────────────────────
-    unless ( $mam_url && $secret ) {
-        return $self->_render_error(
-            'Plugin Not Configured',
-            'Please set the MAM URL and Shared Secret in the plugin configuration.',
-            { show_configure_link => 1 },
-        );
-    }
-
-    # ── Guard: user must be logged in ────────────────────────────────
-    my $userenv = C4::Context->userenv;
-    unless ( $userenv && $userenv->{'userid'} ) {
-        return $self->_render_error(
-            'Authentication Required',
-            'You must be logged in to the Koha staff interface to use Media Asset Management (MAM).',
-        );
-    }
-
-    my $userid         = $userenv->{'userid'};
-    my $borrowernumber = $userenv->{'number'}    // '';
-    my $firstname      = $userenv->{'firstname'} // '';
-    my $surname        = $userenv->{'surname'}   // '';
-    my $branch         = $userenv->{'branch'}    // '';
-
-    # ── Guard: permission check ──────────────────────────────────────
-    unless ( $self->_user_has_permission( $userid, $allowed_perms ) ) {
-        $self->_log_event({
-            userid         => $userid,
-            borrowernumber => $borrowernumber,
-            biblionumber   => scalar $cgi->param('biblionumber'),
-            action         => 'sso_redirect',
-            status         => 'denied',
-            details        => "Insufficient permissions (requires: $allowed_perms)",
-        });
-        return $self->_render_error(
-            'Access Denied',
-            'You do not have the required permissions to use Media Asset Management (MAM).',
-            { required_permissions => $allowed_perms },
-        );
-    }
-
-    # ── Guard: valid biblionumber ────────────────────────────────────
-    my $biblionumber = scalar( $cgi->param('biblionumber') ) // '';
-    unless ( $biblionumber =~ /^\d+$/ ) {
-        return $self->_render_error(
-            'Invalid Record',
-            'A valid bibliographic record number is required to proceed.',
-        );
-    }
-
-    # ── Build HMAC-SHA256 signed payload ─────────────────────────────
-    #
-    #  Payload format:  userid|borrowernumber|biblionumber|timestamp
-    #
-    #  MAM must reconstruct the same string from the query
-    #  parameters and verify the signature with the shared secret.
-    #  The timestamp + TTL allow MAM to reject expired tokens.
-    #
-    my $timestamp = time();
-    my $payload   = join( '|', $userid, $borrowernumber, $biblionumber, $timestamp );
-    my $signature = hmac_sha256_hex( $payload, $secret );
-
-    # ── Audit log ────────────────────────────────────────────────────
-    $self->_log_event({
-        userid         => $userid,
-        borrowernumber => $borrowernumber,
-        biblionumber   => $biblionumber,
-        action         => 'sso_redirect',
-        status         => 'success',
-        details        => "TTL=${token_ttl}s",
-    });
-
-    # ── Redirect to MAM SSO endpoint ─────────────────────────────
-    my $redirect_url = sprintf(
-        '%s/sso/koha?userid=%s&borrowernumber=%s&biblio_id=%s&timestamp=%s&ttl=%s&name=%s&branch=%s&signature=%s',
-        $mam_url,
-        uri_escape_utf8($userid),
-        uri_escape_utf8($borrowernumber),
-        uri_escape_utf8($biblionumber),
-        uri_escape_utf8($timestamp),
-        uri_escape_utf8($token_ttl),
-        uri_escape_utf8("$firstname $surname"),
-        uri_escape_utf8($branch),
-        uri_escape_utf8($signature),
-    );
-
-    print $cgi->redirect($redirect_url);
-    exit;    # Required: prevents run.pl from emitting further output
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: Dashboard
-# ─────────────────────────────────────────────────────────────────────
-
-sub _show_dashboard {
-    my ( $self, $cgi, $extra_params ) = @_;
-
-    my $mam_url   = $self->retrieve_data('mam_url')         // '';
-    my $secret        = $self->retrieve_data('shared_secret')       // '';
-    my $token_ttl     = $self->retrieve_data('token_ttl')           // '300';
-    my $button_label  = $self->retrieve_data('button_label')        // 'Upload Secure Media';
-    my $allowed_perms = $self->retrieve_data('allowed_permissions') // '';
-    my $is_configured = ( $mam_url && $secret ) ? 1 : 0;
-
-    my $logs = $self->_fetch_recent_logs(50);
-
-    my $template = $self->get_template({ file => 'tool.tt' });
-    $template->param(
-        is_configured => $is_configured,
-        mam_url   => $mam_url,
-        token_ttl     => $token_ttl,
-        button_label  => $button_label,
-        allowed_perms => $allowed_perms,
-        logs          => $logs,
-        CLASS         => $self->{'metadata'}->{'class'},
-        %{ $extra_params // {} },
-    );
-    $self->output_html( $template->output() );
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: Connection Test
-# ─────────────────────────────────────────────────────────────────────
-
-sub _handle_connection_test {
-    my ( $self, $cgi ) = @_;
-
-    my $mam_url = $self->retrieve_data('mam_url') // '';
-    my ( $test_success, $test_message ) = ( 0, '' );
-
-    if ( !$mam_url ) {
-        $test_message = 'MAM URL is not configured.';
-    }
-    else {
-        eval {
-            my $http     = HTTP::Tiny->new( timeout => 10 );
-            my $response = $http->get($mam_url);
-
-            if ( $response->{success} ) {
-                $test_success = 1;
-                $test_message = "Connection successful (HTTP $response->{status}).";
+    my ($self) = @_;
+    my $cgi = $self->{cgi};
+    my $op = scalar($cgi->param('op')) // '';
+    my $ok = eval {
+        if ($op eq 'cud-authorize') { $self->_authorize($cgi); }
+        elsif ($op eq 'continue') { $self->_continue($cgi); }
+        elsif ($op eq 'cud-complete') { $self->_complete($cgi); }
+        elsif ($op eq 'redirect') { $self->_error('Protocol retired','Legacy HMAC handoff is disabled. Use the updated catalogue toolbar.',400); }
+        else {
+            # `return` inside eval leaves the eval, so return 1 after rendering an
+            # error: otherwise a second "Service unavailable" page would be printed.
+            unless ($self->_admin($cgi)) {
+                $self->_error('Access denied','Only superlibrarians may view audit and diagnostics.',403);
+                return 1;
             }
-            else {
-                $test_message = "HTTP $response->{status} – $response->{reason}";
+            my $health;
+            if ($op eq 'cud-test') {
+                unless ($self->_valid_post($cgi)) {
+                    $self->_error('Invalid request','CSRF validation failed.',403);
+                    return 1;
+                }
+                if ($self->_ready) {
+                    $health = Koha::Plugin::Com::Library::MediaManager::Health->check({%{$self->_config},insecure_http=>$self->_insecure_http});
+                } else { $health = {reachable=>0,compatible=>0,message=>'Complete configuration first.'}; }
+                $self->_audit($health->{reachable} ? 'connection_test_success':'connection_test_failed',
+                    $health->{reachable} ? 'success':'failed',{userid=>C4::Context->userenv->{userid},patron_id=>C4::Context->userenv->{number}},{});
             }
-        };
-        if ($@) {
-            $test_message = "Connection error: $@";
+            $self->_dashboard($cgi,$health);
         }
-    }
+        1;
+    };
+    return $self->_error('Service unavailable','The integration could not complete the request. Contact the Koha administrator.',503) unless $ok;
+}
 
-    # Audit log
-    my $userenv = C4::Context->userenv;
-    if ($userenv) {
-        $self->_log_event({
-            userid         => $userenv->{'userid'},
-            borrowernumber => $userenv->{'number'},
-            action         => 'connection_test',
-            status         => $test_success ? 'success' : 'failed',
-            details        => $test_message,
+sub _authorize {
+    my ($self,$cgi) = @_;
+    return $self->_error('HTTPS required','Use the HTTPS staff interface.',400) unless $self->_transport_ok;
+    return $self->_error('Invalid request','A valid staff POST with CSRF protection is required.',403) unless $self->_valid_post($cgi);
+    my ($p,$session) = $self->_staff($cgi);
+    return $self->_error('Authentication required','Sign into the staff interface.',401) unless $p;
+    my $ctx = {userid=>$p->userid,patron_id=>$p->borrowernumber,correlation_id=>random_hex()};
+    $self->_audit('sso_authorization_started','started',$ctx,{});
+    return $self->_error('Not configured','The administrator must configure protocol v2.',503) unless $self->_ready;
+    unless (@{$self->_capabilities($p)}) {
+        $self->_audit('permission_denied','denied',$ctx,{});
+        return $self->_error('Access denied','Required staff permissions are missing.',403);
+    }
+    return $self->_error('Too many requests','Try again in one minute.',429) unless $self->_rate('staff:'.$p->borrowernumber,20);
+    my $id = scalar $cgi->param('biblionumber');
+    return $self->_error('Invalid record','Choose an existing bibliographic record.',400) unless valid_id($id);
+    return $self->_error('Record unavailable','This bibliographic record is unavailable.',404) unless Koha::Biblios->find($id);
+    $ctx->{biblio_id} = 0+$id;
+    my $cfg = $self->_config;
+    my $request = random_hex();
+    my $dbh = $self->_db;
+    my $table = $self->_table('requests');
+    $dbh->do("INSERT INTO $table (request_hash,session_hash,patron_id,biblio_id,branch,binding,expires_at,correlation_id) VALUES (?,?,?,?,?,?,UNIX_TIMESTAMP()+120,?)",
+        undef,sha256_hex($request),sha256_hex(scalar $cgi->cookie('CGISESSID')),
+        $p->borrowernumber,$id,C4::Context->userenv->{branch} // '',_binding($cfg),$ctx->{correlation_id})
+        or die 'Cannot store initiation';
+    print $cgi->redirect(-uri=>$cfg->{mam_url}.'/sso/koha/start?request='.$request,
+        -status=>'303 See Other', -Cache_Control=>'no-store', -Pragma=>'no-cache', -Referrer_Policy=>'no-referrer');
+    return;
+}
+
+sub _binding {
+    my ($cfg) = @_;
+    return sha256_hex(join "\0",@$cfg{qw(mam_url instance_id client_id)});
+}
+
+sub _continue {
+    my ($self,$cgi) = @_;
+    my ($p) = $self->_staff($cgi);
+    return $self->_error('Access denied','A valid HTTPS staff session is required.',403)
+        unless $p && $self->_transport_ok;
+    my $request = scalar($cgi->param('request')) // '';
+    my $state = scalar($cgi->param('state')) // '';
+    return $self->_error('Invalid request','Invalid browser binding.',400)
+        unless $request =~ /\A[0-9a-f]{64}\z/ && $state =~ /\A[A-Za-z0-9_-]{43,128}\z/;
+    # Cross-site top-level GET carries SameSite=Lax staff cookies. The local POST
+    # then uses Koha CSRF protection; no grant is created by this GET.
+    my $template = $self->get_template({file=>'continue.tt'});
+    $template->param(request=>$request,state=>$state,$self->_form_params($cgi));
+    $self->output_html($template->output,undef,{force_no_caching=>1});
+}
+
+sub _complete {
+    my ($self,$cgi) = @_;
+    return $self->_error('Invalid request','A valid HTTPS POST is required.',403)
+        unless $self->_transport_ok && $self->_valid_post($cgi);
+    my ($p) = $self->_staff($cgi);
+    return $self->_error('Access denied','Staff authorization is unavailable.',403)
+        unless $p && $self->_ready && @{$self->_capabilities($p)};
+    my $request = scalar($cgi->param('request')) // '';
+    my $state = scalar($cgi->param('state')) // '';
+    return $self->_error('Invalid request','Invalid browser binding.',400)
+        unless $request =~ /\A[0-9a-f]{64}\z/ && $state =~ /\A[A-Za-z0-9_-]{43,128}\z/;
+    my $cfg = $self->_config;
+    my $dbh = $self->_db;
+    my $table = $self->_table('requests');
+    my $code = random_hex();
+    my $ok = eval {
+        $dbh->begin_work or die 'Cannot begin';
+        my $row = $dbh->selectrow_hashref("SELECT *,UNIX_TIMESTAMP() AS now_epoch FROM $table WHERE request_hash=? FOR UPDATE",
+            undef,sha256_hex($request));
+        die 'Invalid initiation' unless $row && !defined($row->{consumed_at})
+            && $row->{expires_at} > $row->{now_epoch}
+            && $row->{session_hash} eq sha256_hex(scalar $cgi->cookie('CGISESSID'))
+            && $row->{patron_id} == $p->borrowernumber && $row->{binding} eq _binding($cfg)
+            && Koha::Biblios->find($row->{biblio_id});
+        $dbh->do("UPDATE $table SET consumed_at=UNIX_TIMESTAMP() WHERE request_hash=?",undef,sha256_hex($request))
+            or die 'Cannot consume initiation';
+        $self->_store->issue($code,{
+            patron_id=>$p->borrowernumber,biblio_id=>$row->{biblio_id},branch=>$row->{branch},
+            issuer=>$cfg->{instance_id},audience=>'media-manager',client_id=>$cfg->{client_id},
+            ttl=>$cfg->{code_ttl},correlation_id=>$row->{correlation_id},browser_state=>$state,
         });
+        $self->_audit('sso_authorization_issued','success',{
+            userid=>$p->userid,patron_id=>$p->borrowernumber,biblio_id=>$row->{biblio_id},
+            correlation_id=>$row->{correlation_id},
+        },{transport=>_https() ? 'https' : 'insecure_http_test'});
+        $dbh->commit or die 'Cannot commit';
+        1;
+    };
+    unless ($ok) {
+        eval { $dbh->rollback unless $dbh->{AutoCommit} };
+        $self->_audit('sso_exchange_failed','failed',{userid=>$p->userid,patron_id=>$p->borrowernumber},{reason=>'browser_binding_failed'});
+        return $self->_error('Handoff unavailable','The initiation expired, was already used, or belongs to another staff session. Start again from the catalogue.',400);
     }
+    print $cgi->redirect(-uri=>$cfg->{mam_url}.'/sso/koha?code='.$code.'&state='.$state,
+        -status=>'303 See Other', -Cache_Control=>'no-store', -Pragma=>'no-cache', -Referrer_Policy=>'no-referrer');
+    return;
+}
 
-    return $self->_show_dashboard(
-        $cgi,
-        {
-            test_performed => 1,
-            test_success   => $test_success,
-            test_message   => $test_message,
+sub _store {
+    my ($self) = @_;
+    return Koha::Plugin::Com::Library::MediaManager::Store->new($self->_db,$self->_table('codes'));
+}
+
+sub exchange {
+    my ($self,$body,$client,$secret,$ip) = @_;
+    my $ctx = {source_ip=>$ip,correlation_id=>random_hex()};
+    return (503,{error=>'temporarily_unavailable'}) unless $self->is_enabled && $self->_ready;
+    unless ($self->_rate('exchange:global',600) && $self->_rate('exchange:'.$ip,60)) {
+        return (429,{error=>'rate_limited'});
+    }
+    my ($now) = $self->_db->selectrow_array('SELECT UNIX_TIMESTAMP()');
+    my $authenticated = defined($client) && $client eq $self->retrieve_data('client_id')
+        && (secret_matches($secret,$self->retrieve_data('client_secret_hash'))
+        || (($self->retrieve_data('previous_secret_until') // 0) > $now
+            && secret_matches($secret,$self->retrieve_data('previous_secret_hash'))));
+    unless ($authenticated) {
+        $self->_audit('sso_exchange_failed','failed',$ctx,{reason=>'invalid_client'});
+        return (401,{error=>'invalid_client'});
+    }
+    unless (ref($body) eq 'HASH' && keys(%$body) == 1 && defined($body->{code})
+        && !ref($body->{code}) && $body->{code} =~ /\A[0-9a-f]{64}\z/) {
+        $self->_audit('sso_exchange_failed','failed',$ctx,{reason=>'invalid_request'});
+        return (400,{error=>'invalid_request'});
+    }
+    my $cfg = $self->_config;
+    my ($status,$response) = $self->_store->consume($body->{code},
+        {issuer=>$cfg->{instance_id},audience=>'media-manager',client_id=>$client},
+        sub {
+            my ($row) = @_;
+            my $p = $self->_patron($row->{patron_id});
+            return unless $p && Koha::Biblios->find($row->{biblio_id});
+            $ctx->{userid} = $p->userid;
+            my $caps = $self->_capabilities($p);
+            return unless @$caps;
+            return {
+                success=>JSON::PP::true, protocol=>'code-v2', iss=>$row->{issuer}, aud=>$row->{audience},
+                identity=>{provider=>'koha',instance=>$row->{issuer},patron_id=>0+$p->borrowernumber,userid=>$p->userid},
+                context=>{biblio_id=>0+$row->{biblio_id},branch=>$row->{branch}},
+                capabilities=>$caps,issued_at=>0+$row->{issued_at},expires_at=>0+$row->{expires_at},
+                correlation_id=>$row->{correlation_id},state=>$row->{browser_state},
+            };
         },
-    );
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: Error Page
-# ─────────────────────────────────────────────────────────────────────
-
-sub _render_error {
-    my ( $self, $title, $message, $extra ) = @_;
-
-    my $template = $self->get_template({ file => 'error.tt' });
-    $template->param(
-        error_title   => $title,
-        error_message => $message,
-        CLASS         => $self->{'metadata'}->{'class'},
-        %{ $extra // {} },
-    );
-    $self->output_html( $template->output() );
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: Permission Helper
-# ─────────────────────────────────────────────────────────────────────
-
-sub _user_has_permission {
-    my ( $self, $userid, $allowed_perms_csv ) = @_;
-
-    my $userenv = C4::Context->userenv;
-    return 0 unless $userenv;
-
-    # Superlibrarians always pass (bit 0 of the flags bitmask)
-    my $flags = $userenv->{'flags'} // 0;
-    return 1 if ( $flags & 1 );
-
-    my @allowed = split( /\s*,\s*/, $allowed_perms_csv );
-
-    for my $perm (@allowed) {
-        next unless $perm;
-        next if lc($perm) eq 'superlibrarian';    # already checked
-
-        my $has = eval { haspermission( $userid, { $perm => '*' } ) };
-        return 1 if $has;
-    }
-
-    return 0;
-}
-
-# ─────────────────────────────────────────────────────────────────────
-#  Private: Audit Logging
-# ─────────────────────────────────────────────────────────────────────
-
-sub _log_event {
-    my ( $self, $params ) = @_;
-
-    my $dbh       = C4::Context->dbh;
-    my $log_table = $self->get_qualified_table_name('log');
-
-    eval {
-        my $sth = $dbh->prepare(qq{
-            INSERT INTO `$log_table`
-                (userid, borrowernumber, biblionumber, action, ip_address, status, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+        sub {
+            my ($result,$row) = @_;
+            my %event = (success=>'sso_exchange_success',replay=>'sso_replay_rejected',
+                expired=>'sso_code_expired',permission_denied=>'permission_denied');
+            my $event_ctx = {%$ctx};
+            if ($row) { @$event_ctx{qw(patron_id biblio_id correlation_id)} = @$row{qw(patron_id biblio_id correlation_id)}; }
+            $self->_audit($event{$result} // 'sso_exchange_failed',$result eq 'success' ? 'success':'failed',$event_ctx,{});
         });
-        $sth->execute(
-            $params->{userid},
-            $params->{borrowernumber},
-            $params->{biblionumber},
-            $params->{action}     // 'unknown',
-            $params->{ip_address} // $ENV{'REMOTE_ADDR'} // '0.0.0.0',
-            $params->{status}     // 'success',
-            $params->{details},
-        );
-
-        # Probabilistic housekeeping: purge rows > 90 days old on ~5 %
-        # of inserts to keep the table bounded without running a cron.
-        if ( int( rand(20) ) == 0 ) {
-            $dbh->do(qq{
-                DELETE FROM `$log_table`
-                WHERE  created_at < DATE_SUB( NOW(), INTERVAL 90 DAY )
-            });
-        }
-    };
-    if ($@) {
-        warn "MediaManager: failed to log event – $@";
-    }
+    return (200,$response) if $status eq 'success';
+    return (403,{error=>'access_denied'}) if $status eq 'permission_denied';
+    return (400,{error=>'invalid_grant'});
 }
 
-sub _fetch_recent_logs {
-    my ( $self, $limit ) = @_;
-    $limit //= 50;
-
-    my $dbh       = C4::Context->dbh;
-    my $log_table = $self->get_qualified_table_name('log');
-    my $logs      = [];
-
-    eval {
-        my $sth = $dbh->prepare(qq{
-            SELECT id, userid, borrowernumber, biblionumber,
-                   action, ip_address, status, details, created_at
-            FROM   `$log_table`
-            ORDER  BY created_at DESC
-            LIMIT  ?
-        });
-        $sth->execute($limit);
-        while ( my $row = $sth->fetchrow_hashref ) {
-            push @{$logs}, $row;
-        }
-    };
-    if ($@) {
-        warn "MediaManager: failed to fetch logs – $@";
-    }
-
-    return $logs;
+sub api_namespace { return 'media-manager'; }
+sub api_routes {
+    my ($self) = @_;
+    open my $fh,'<:raw',$self->mbf_path('openapi.json') or die 'Missing route schema';
+    local $/;
+    return decode_json(<$fh>);
 }
 
+sub _dashboard {
+    my ($self,$cgi,$health) = @_;
+    my $per_page = 20;
+    my $page = scalar($cgi->param('page')) // 1;
+    $page = 1 unless $page =~ /\A[1-9][0-9]{0,4}\z/;
+    my $action = scalar($cgi->param('event')) // '';
+    $action = '' unless $action =~ /\A[a-z_]{1,50}\z/;
+    my $t = $self->_table('log');
+    my $where = $action ? ' WHERE action=?' : '';
+    my @bind = $action ? ($action) : ();
+    my ($total) = $self->_db->selectrow_array("SELECT COUNT(*) FROM $t$where",undef,@bind);
+    $total ||= 0;
+    my $pages = $total ? int(($total + $per_page - 1) / $per_page) : 1;
+    $page = $pages if $page > $pages;
+    my $logs = $self->_db->selectall_arrayref(
+        "SELECT *, UNIX_TIMESTAMP(created_at) AS event_epoch FROM $t$where ORDER BY id DESC LIMIT ? OFFSET ?",
+        {Slice=>{}},@bind,$per_page,($page-1)*$per_page) || [];
+    $_->{utc_time} = strftime('%Y-%m-%d %H:%M:%S UTC',gmtime($_->{event_epoch})) for @$logs;
+    # Page numbers shown around the current page (first and last are always offered as links).
+    my $from = $page - 2 < 1 ? 1 : $page - 2;
+    my $to = $from + 4 > $pages ? $pages : $from + 4;
+    $from = $to - 4 < 1 ? 1 : $to - 4;
+    my $storage = eval {
+        for my $name (qw(log requests codes rates)) {
+            $self->_db->selectrow_array('SELECT COUNT(*) FROM '.$self->_table($name).' WHERE 1=0');
+        }
+        1;
+    };
+    my $template = $self->get_template({file=>'tool.tt'});
+    $template->param(%{$self->_config},is_configured=>$self->_ready,storage_ok=>$storage ? 1:0,
+        logs=>$logs,page=>$page,pages=>$pages,total=>$total,page_numbers=>[$from..$to],
+        first_row=>$total ? ($page-1)*$per_page+1 : 0, last_row=>($page-1)*$per_page+scalar(@$logs),
+        previous=>$page-1,next=>$page < $pages ? $page+1 : 0,event=>$action,
+        page_base=>'/cgi-bin/koha/plugins/run.pl?class='.uri_escape(__PACKAGE__).'&method=tool&event='.uri_escape($action).'&page=',
+        insecure_http=>$self->_insecure_http,
+        health=>$health,$self->_form_params($cgi));
+    $self->output_html($template->output,undef,{force_no_caching=>1});
+}
+
+sub _error {
+    my ($self,$title,$message,$status) = @_;
+    my $template = $self->get_template({file=>'error.tt'});
+    $template->param(error_title=>$title,error_message=>$message);
+    $self->output_html($template->output,($status // 400).' Error',{force_no_caching=>1});
+    return;
+}
+
+sub maintenance {
+    my ($self) = @_;
+    my $days = $self->retrieve_data('audit_retention') // 90;
+    die 'Invalid retention' unless $days =~ /\A[0-9]{1,4}\z/ && $days >= 1 && $days <= 3650;
+    my $dbh = $self->_db;
+    # Bounded batches, run only by the explicitly installed maintenance command.
+    for my $spec (
+        ['log','created_at < DATE_SUB(NOW(), INTERVAL ? DAY)',$days],
+        ['codes','expires_at < UNIX_TIMESTAMP()-?',86400],
+        ['requests','expires_at < UNIX_TIMESTAMP()-?',86400],
+        ['rates','window_id < FLOOR(UNIX_TIMESTAMP()/60)-?',60],
+    ) {
+        my ($name,$predicate,$value) = @$spec;
+        my $t = $self->_table($name);
+        for (1..100) {
+            my $rows = $dbh->do("DELETE FROM $t WHERE $predicate LIMIT 1000",undef,$value);
+            die 'Maintenance failed' unless defined $rows;
+            last if $rows < 1000;
+        }
+    }
+    return 1;
+}
 1;

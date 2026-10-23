@@ -1,0 +1,34 @@
+[%# Koha staff breadcrumb trail (same markup as Koha's html_helpers "breadcrumbs" block).
+    Parameters:
+      mm_crumb  = current page label
+      mm_parent = 1 to link the plugin dashboard before the current page
+      mm_staff  = 1 for pages reached by cataloguers (no Administration links) %]
+<div id="sub-header">
+    <nav id="breadcrumbs" aria-label="Breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/mainpage.pl" title="Home"><span class="visually-hidden-focusable">Home</span></a>
+            </li>
+            [% IF mm_staff %]
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/cataloguing/cataloging-home.pl">Cataloguing</a>
+            </li>
+            [% ELSE %]
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
+            </li>
+            [% IF mm_parent %]
+            <li class="breadcrumb-item">
+                <a href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool">Media Asset Management (MAM)</a>
+            </li>
+            [% END %]
+            [% END %]
+            <li class="breadcrumb-item active" aria-current="page">
+                <a aria-disabled="true" tabindex="-1"><span>[% mm_crumb | html %]</span></a>
+            </li>
+        </ol>
+    </nav>
+</div>

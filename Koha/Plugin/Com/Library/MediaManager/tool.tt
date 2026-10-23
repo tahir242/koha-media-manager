@@ -1,193 +1,84 @@
+[% USE Koha %]
+[% SET mm_form_csrf = Koha.GenerateCSRF || mm_csrf_token %]
 [% INCLUDE 'doc-head-open.inc' %]
-<title>Media Asset Management (MAM) &ndash; Dashboard</title>
+<title>Media Asset Management (MAM) &rsaquo; Plugins &rsaquo; Koha</title>
 [% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_tool" class="plugins">
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb='Media Asset Management (MAM)' mm_parent=0 %]
 
-<div id="sub-header">
-    <nav id="breadcrumbs" aria-label="Breadcrumb">
-        <ol class="breadcrumb">
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/mainpage.pl" title="Home"><span class="visually-hidden-focusable">Home</span></a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="/cgi-bin/koha/plugins/plugins-home.pl">Plugins</a>
-            </li>
+<div class="main container-fluid mm-page">
+<h1>Media Asset Management (MAM)</h1>
+<p class="mm-lead">Plugin version <strong>[% mm_version | html %]</strong>. Staff open the MAM from the <em>Upload Secure Media</em> button on any bibliographic record.</p>
 
-            <li class="breadcrumb-item active" aria-current="page">
-                <a aria-disabled="true" tabindex="-1"><span>Media Asset Management (MAM) &ndash; Dashboard</span></a>
-            </li>
-        </ol>
-    </nav>
+<div class="mm-actions">
+    [% IF mam_url %]
+    <a class="btn btn-primary" href="[% mam_url | url %]/staff"><i class="fa fa-external-link" aria-hidden="true"></i> Go to MAM</a>
+    [% END %]
+    <a class="btn btn-default" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=configure"><i class="fa fa-pencil" aria-hidden="true"></i> Configure</a>
+    <form method="post" action="/cgi-bin/koha/plugins/run.pl">
+        <input type="hidden" name="class" value="[% CLASS | html %]"><input type="hidden" name="method" value="tool">
+        <input type="hidden" name="op" value="cud-test"><input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+        <button type="submit" class="btn btn-default"><i class="fa fa-plug" aria-hidden="true"></i> Test connection</button>
+    </form>
 </div>
 
-<div class="main container-fluid">
-    <div class="row">
-        <div class="col-md-10 col-md-offset-1">
+[% IF health %]<div class="alert [% IF health.reachable && health.compatible %]alert-success[% ELSE %]alert-warning[% END %]" role="status">[% health.message | html %]</div>[% END %]
 
-            <h1><i class="fa fa-upload"></i> Media Asset Management (MAM) Dashboard</h1>
+<div class="page-section">
+    <h2>Status</h2>
+    <table class="table table-striped mm-status"><tbody>
+        <tr><th scope="row">Configured</th><td>[% IF is_configured %]Yes[% ELSE %]No: open Configure[% END %]</td></tr>
+        <tr><th scope="row">Application</th><td>[% mam_url || '—' | html %]</td></tr>
+        <tr><th scope="row">Allow HTTP</th><td>[% IF insecure_http %]Yes (test networks only)[% ELSE %]No (HTTPS required)[% END %]</td></tr>
+        <tr><th scope="row">Connection</th><td>[% IF health %][% IF health.reachable && health.compatible %]OK[% ELSE %]Problem: see message above[% END %][% ELSE %]Not tested yet[% END %]</td></tr>
+        <tr><th scope="row">Storage</th><td>[% IF storage_ok %]OK[% ELSE %]Unavailable[% END %]</td></tr>
+    </tbody></table>
+</div>
 
-            <!-- ── Connection-Test Result ──────────────────────── -->
-            [% IF test_performed %]
-                [% IF test_success %]
-                    <div class="alert alert-success">
-                        <i class="fa fa-check-circle"></i>
-                        <strong>Connection Test Passed:</strong>
-                        [% test_message | html %]
-                    </div>
-                [% ELSE %]
-                    <div class="alert alert-danger">
-                        <i class="fa fa-times-circle"></i>
-                        <strong>Connection Test Failed:</strong>
-                        [% test_message | html %]
-                    </div>
-                [% END %]
-            [% END %]
-
-            <!-- ── Configuration Status ────────────────────────── -->
-            <div class="panel panel-default">
-                <div class="panel-heading" style="padding:8px 20px;">
-                    <h3 class="panel-title">
-                        Plugin Status -  
-						[% IF is_configured %]
-                            <small class="text-success">Configured</small>
-                        [% ELSE %]
-                            <small class="text-danger">Not Configured</small>
-                        [% END %]
-                    </h3>
-                </div>
-                <div class="panel-body" style="padding:10px 20px;">
-                    <table class="table table-condensed">
-                        <tbody>
-                            <tr>
-                                <th style="width:200px;">MAM URL</th>
-                                <td>
-                                    [% IF mam_url %]
-                                        <code>[% mam_url | html %]</code>
-                                    [% ELSE %]
-                                        <span class="text-danger"><i class="fa fa-warning"></i> Not set</span>
-                                    [% END %]
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Shared Secret</th>
-                                <td>
-                                    [% IF is_configured %]
-                                        <span class="text-success"><i class="fa fa-lock"></i> Configured</span>
-                                    [% ELSE %]
-                                        <span class="text-danger"><i class="fa fa-warning"></i> Not set</span>
-                                    [% END %]
-                                </td>
-                            </tr>
-                            <tr>
-                                <th>Token TTL</th>
-                                <td>[% token_ttl | html %] seconds</td>
-                            </tr>
-                            <tr>
-                                <th>Button Label</th>
-                                <td>&ldquo;[% button_label | html %]&rdquo;</td>
-                            </tr>
-                            <tr>
-                                <th>Allowed Permissions</th>
-                                <td><code>[% allowed_perms | html %]</code></td>
-                            </tr>
-                        </tbody>
-                    </table>
-
-                    <div class="mam-actions" style="display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:16px 0;">
-                        <a class="btn btn-default btn-sm"
-                           href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=configure">
-                            <i class="fa fa-cog"></i> Edit Configuration
-                        </a>
-                        [% IF is_configured %]
-                            <a class="btn btn-info btn-sm"
-                               href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool&amp;op=test_connection">
-                                <i class="fa fa-plug"></i> Test Connection
-                            </a>
-                        [% END %]
-                    </div>
-                </div>
-            </div>
-
-            <!-- ── Activity Log ────────────────────────────────── -->
-            <div class="panel panel-default mam-recent-activity" style="margin-top:20px; margin-bottom:20px;">
-                <div class="panel-heading" style="padding:8px 20px;">
-                    <h3 class="panel-title">
-                        <i class="fa fa-list"></i> Recent Activity
-                        <small class="text-muted">(last 50 events &middot; auto-purged after 90 days)</small>
-                    </h3>
-                </div>
-                <div class="panel-body" style="padding:20px;">
-                    [% IF logs.size %]
-                        <div class="table-responsive">
-                            <table class="table table-striped table-condensed table-hover" id="mm-activity-log">
-                                <thead>
-                                    <tr>
-                                        <th>Date / Time</th>
-                                        <th>User</th>
-                                        <th>Biblio&nbsp;#</th>
-                                        <th>Action</th>
-                                        <th>Status</th>
-                                        <th>IP Address</th>
-                                        <th>Details</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    [% FOREACH log IN logs %]
-                                        <tr class="[% IF log.status == 'denied' %]warning[% ELSIF log.status == 'failed' %]danger[% END %]">
-                                            <td style="white-space:nowrap;">[% log.created_at | html %]</td>
-                                            <td>[% log.userid | html %]</td>
-                                            <td>
-                                                [% IF log.biblionumber %]
-                                                    <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% log.biblionumber | uri %]"
-                                                       title="View bibliographic record">
-                                                        [% log.biblionumber | html %]
-                                                    </a>
-                                                [% ELSE %]
-                                                    &mdash;
-                                                [% END %]
-                                            </td>
-                                            <td>[% log.action | html %]</td>
-                                            <td>
-                                                [% IF log.status == 'success' %]
-                                                    <span class="label label-success">[% log.status | html %]</span>
-                                                [% ELSIF log.status == 'denied' %]
-                                                    <span class="label label-warning">[% log.status | html %]</span>
-                                                [% ELSE %]
-                                                    <span class="label label-danger">[% log.status | html %]</span>
-                                                [% END %]
-                                            </td>
-                                            <td>[% log.ip_address | html %]</td>
-                                            <td>[% log.details | html %]</td>
-                                        </tr>
-                                    [% END %]
-                                </tbody>
-                            </table>
-                        </div>
-                    [% ELSE %]
-                        <p class="text-muted"><i class="fa fa-info-circle"></i> No activity recorded yet. Entries appear here when staff use the Media Asset Management (MAM) button.</p>
-                    [% END %]
-                </div>
-            </div>
-
+<div class="page-section">
+    <h2>Audit log</h2>
+    <form class="mm-filter" method="get" action="/cgi-bin/koha/plugins/run.pl">
+        <input type="hidden" name="class" value="[% CLASS | html %]"><input type="hidden" name="method" value="tool">
+        <div class="mm-filter-field">
+            <label for="event">Event:</label>
+            <input id="event" name="event" type="text" value="[% event | html %]" placeholder="e.g. sso_exchange_success" aria-describedby="event_hint">
+            <div class="hint" id="event_hint">Exact event name, or blank for all. Times are UTC; kept [% audit_retention | html %] days.</div>
         </div>
+        <button class="btn btn-default" type="submit"><i class="fa fa-filter" aria-hidden="true"></i> Filter</button>
+    </form>
+    <div class="table-responsive"><table class="table table-striped">
+        <thead><tr><th>ID</th><th>UTC time</th><th>User / patron</th><th>Biblio</th><th>Event</th><th>Status</th><th>Source IP</th><th>Details</th></tr></thead>
+        <tbody>
+        [% FOREACH log IN logs %]<tr>
+            <td>[% log.id | html %]</td><td>[% log.utc_time | html %]</td>
+            <td>[% log.userid | html %] / [% log.borrowernumber | html %]</td><td>[% log.biblionumber | html %]</td>
+            <td>[% log.action | html %]</td><td>[% log.status | html %]</td><td>[% log.ip_address | html %]</td><td class="mm-details">[% log.details | html %]</td>
+        </tr>[% END %]
+        [% UNLESS logs.size %]<tr><td colspan="8">No matching events.</td></tr>[% END %]
+        </tbody>
+    </table></div>
+
+    [% SET mm_base = page_base %]
+    <div class="mm-pager">
+        <span class="mm-pager-info">[% IF total %]Showing [% first_row | html %]–[% last_row | html %] of [% total | html %][% ELSE %]0 events[% END %]</span>
+        [% IF pages > 1 %]
+        <nav aria-label="Audit log pages">
+            <ul class="pagination">
+                <li class="page-item[% UNLESS previous %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %]1" aria-label="First page">&laquo;</a></li>
+                <li class="page-item[% UNLESS previous %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% previous || 1 | html %]" aria-label="Previous page">&lsaquo;</a></li>
+                [% FOREACH n IN page_numbers %]
+                <li class="page-item[% IF n == page %] active[% END %]"><a class="page-link" href="[% mm_base | html %][% n | html %]" [% IF n == page %]aria-current="page"[% END %]>[% n | html %]</a></li>
+                [% END %]
+                <li class="page-item[% UNLESS next %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% next || pages | html %]" aria-label="Next page">&rsaquo;</a></li>
+                <li class="page-item[% UNLESS next %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% pages | html %]" aria-label="Last page">&raquo;</a></li>
+            </ul>
+        </nav>
+        [% END %]
     </div>
 </div>
-
-<!-- Activate DataTables sorting/search if available -->
-<script>
-$(document).ready(function(){
-    if($.fn.DataTable && document.getElementById('mm-activity-log')){
-        $('#mm-activity-log').DataTable({
-            'order':     [[0,'desc']],
-            'pageLength': 25,
-            'language':  { 'emptyTable': 'No activity recorded yet' }
-        });
-    }
-});
-</script>
-
+</div>
 [% INCLUDE 'intranet-bottom.inc' %]

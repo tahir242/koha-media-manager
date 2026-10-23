@@ -1,0 +1,27 @@
+[% USE Koha %]
+[% SET mm_form_csrf = Koha.GenerateCSRF || mm_csrf_token %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Secure media hand-off &rsaquo; Koha</title>
+<meta name="referrer" content="no-referrer">
+[% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_continue" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb='Secure media hand-off' mm_staff=1 %]
+
+<div class="main container-fluid mm-page">
+    <h1>Continuing secure media hand-off</h1>
+    <p class="mm-lead">You are being signed in to the digital asset application. If nothing happens, press Continue.</p>
+    <form id="mm-complete" method="post" action="/cgi-bin/koha/plugins/run.pl">
+        <input type="hidden" name="class" value="[% CLASS | html %]">
+        <input type="hidden" name="method" value="tool">
+        <input type="hidden" name="op" value="cud-complete">
+        <input type="hidden" name="request" value="[% request | html %]">
+        <input type="hidden" name="state" value="[% state | html %]">
+        <input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+        <button class="btn btn-primary" type="submit"><i class="fa fa-arrow-right" aria-hidden="true"></i> Continue</button>
+    </form>
+</div>
+<script nonce="[% Koha.CSPNonce | html %]">document.getElementById('mm-complete').submit();</script>
+[% INCLUDE 'intranet-bottom.inc' %]

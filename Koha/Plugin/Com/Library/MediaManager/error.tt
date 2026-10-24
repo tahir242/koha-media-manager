@@ -1,0 +1,28 @@
+[% USE Koha %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>[% error_title | html %] &rsaquo; Media Asset Management (MAM) &rsaquo; Koha</title>
+[% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_error" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+[%# Errors are also shown to cataloguers (toolbar hand-off), so no Administration links. %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb=error_title mm_staff=1 %]
+
+<div class="main container-fluid mm-page">
+    <div class="alert alert-danger" role="alert">
+        <h2><i class="fa fa-exclamation-triangle" aria-hidden="true"></i> [% error_title | html %]</h2>
+        <p>[% error_message | html %]</p>
+        [% IF required_permissions %]
+            <p>Required permissions: <code>[% required_permissions | html %]</code></p>
+        [% END %]
+    </div>
+    <div class="mm-actions">
+        <a class="btn btn-default" href="/cgi-bin/koha/mainpage.pl"><i class="fa fa-home" aria-hidden="true"></i> Koha home</a>
+        [% IF show_configure_link %]
+            <a class="btn btn-primary" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=configure"><i class="fa fa-pencil" aria-hidden="true"></i> Configure plugin</a>
+        [% END %]
+    </div>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]

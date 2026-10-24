@@ -1,0 +1,263 @@
+{
+  "/exchange": {
+    "post": {
+      "x-mojo-to": "Com::Library::MediaManager::Controller#exchange",
+      "operationId": "mediaManagerExchange",
+      "tags": [
+        "media-manager"
+      ],
+      "summary": "Exchange a single-use staff authorization code",
+      "consumes": [
+        "application/json"
+      ],
+      "produces": [
+        "application/json"
+      ],
+      "parameters": [
+        {
+          "name": "body",
+          "in": "body",
+          "required": true,
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$",
+                "minLength": 64,
+                "maxLength": 64
+              }
+            }
+          }
+        },
+        {
+          "name": "X-Media-Client",
+          "in": "header",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "name": "X-Media-Secret",
+          "in": "header",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "responses": {
+        "200": {
+          "description": "Authorized context",
+          "schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "success",
+              "protocol",
+              "iss",
+              "aud",
+              "identity",
+              "context",
+              "capabilities",
+              "issued_at",
+              "expires_at",
+              "correlation_id",
+              "state"
+            ],
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              },
+              "protocol": {
+                "type": "string",
+                "enum": [
+                  "code-v2"
+                ]
+              },
+              "iss": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "aud": {
+                "type": "string",
+                "enum": [
+                  "media-manager"
+                ]
+              },
+              "identity": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "provider",
+                  "instance",
+                  "patron_id",
+                  "userid"
+                ],
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "enum": [
+                      "koha"
+                    ]
+                  },
+                  "instance": {
+                    "type": "string"
+                  },
+                  "patron_id": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "userid": {
+                    "type": "string"
+                  }
+                }
+              },
+              "context": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "biblio_id",
+                  "branch"
+                ],
+                "properties": {
+                  "biblio_id": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "item_id": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  }
+                }
+              },
+              "capabilities": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "media.access",
+                    "media.upload",
+                    "media.manage",
+                    "media.admin"
+                  ]
+                }
+              },
+              "issued_at": {
+                "type": "integer"
+              },
+              "expires_at": {
+                "type": "integer"
+              },
+              "correlation_id": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "state": {
+                "type": "string",
+                "minLength": 43,
+                "maxLength": 128,
+                "pattern": "^[A-Za-z0-9_-]+$"
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "Invalid request or grant",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Invalid client",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "Access denied",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "413": {
+          "description": "Request too large",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "429": {
+          "description": "Rate limited",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "503": {
+          "description": "Unavailable",
+          "schema": {
+            "type": "object",
+            "required": [
+              "error"
+            ],
+            "properties": {
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

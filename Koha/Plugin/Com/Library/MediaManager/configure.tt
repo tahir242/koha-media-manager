@@ -1,0 +1,108 @@
+[% USE Koha %]
+[% SET mm_form_csrf = Koha.GenerateCSRF || mm_csrf_token %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Configuration &rsaquo; Media Asset Management (MAM) &rsaquo; Plugins &rsaquo; Koha</title>
+[% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_configure" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb='Configuration' mm_parent=1 %]
+
+<div class="main container-fluid mm-page">
+<h1>Media Asset Management (MAM) configuration</h1>
+<p class="mm-lead">Connects the Koha staff interface to the Media Asset Management (MAM) application.</p>
+
+[% IF saved %]<div class="alert alert-success" role="status"><i class="fa fa-check" aria-hidden="true"></i> Configuration saved.</div>[% END %]
+[% FOREACH error IN errors %]<div class="alert alert-danger" role="alert">[% error | html %]</div>[% END %]
+
+<form id="mm-configure" method="post" action="/cgi-bin/koha/plugins/run.pl">
+<input type="hidden" name="class" value="[% CLASS | html %]">
+<input type="hidden" name="method" value="configure">
+<input type="hidden" name="op" value="cud-save">
+<input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+
+<fieldset class="rows">
+    <legend>Application and identity</legend>
+    <ol>
+        <li>
+            <label for="mam_url" class="required">Application URL: </label>
+            <input id="mam_url" name="mam_url" type="text" inputmode="url" size="50" required value="[% mam_url | html %]" aria-describedby="mam_url_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="mam_url_hint">Address of the MAM application, e.g. https://dam.example.org</div>
+        </li>
+        <li>
+            <label for="insecure_http">Allow HTTP: </label>
+            <input id="insecure_http" name="insecure_http" type="checkbox" value="1" [% IF insecure_http %]checked[% END %] [% IF insecure_http_from_server %]disabled[% END %] aria-describedby="insecure_http_hint">
+            <div class="hint" id="insecure_http_hint">Test networks without HTTPS only (sign-in data is not encrypted). Leave unticked in production.[% IF insecure_http_from_server %] Currently forced on in koha-conf.xml.[% END %]</div>
+        </li>
+        <li>
+            <label for="instance_id" class="required">Instance ID: </label>
+            <input id="instance_id" name="instance_id" type="text" size="30" maxlength="64" required value="[% instance_id | html %]" aria-describedby="instance_id_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="instance_id_hint">Stable, unique identifier agreed with the application (its KOHA_INSTANCE_ID).</div>
+        </li>
+        <li>
+            <label for="client_id" class="required">Client ID: </label>
+            <input id="client_id" name="client_id" type="text" size="30" maxlength="64" required value="[% client_id | html %]" aria-describedby="client_id_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="client_id_hint">Must match the application's KOHA_SSO_CLIENT_ID.</div>
+        </li>
+        <li>
+            <label for="client_secret" [% UNLESS secret_configured %]class="required"[% END %]>Client secret: </label>
+            <input id="client_secret" name="client_secret" type="password" autocomplete="new-password" size="50" maxlength="64" aria-describedby="client_secret_hint">
+            [% UNLESS secret_configured %]<span class="required">Required</span>[% END %]
+            <div class="hint" id="client_secret_hint">[% IF secret_configured %]A secret is configured; leave blank to keep it.[% ELSE %]Required for the first configuration.[% END %] 64 lowercase hex characters (openssl rand -hex 32). Stored secrets are never displayed.</div>
+        </li>
+        <li>
+            <label for="rotation_grace" class="required">Rotation overlap: </label>
+            <input id="rotation_grace" name="rotation_grace" type="number" min="120" max="3600" required value="[% rotation_grace | html %]" aria-describedby="rotation_grace_hint"> seconds
+            <div class="hint" id="rotation_grace_hint">How long the previous secret is still accepted after a change (120–3600).</div>
+        </li>
+        <li>
+            <label for="code_ttl" class="required">Code lifetime: </label>
+            <input id="code_ttl" name="code_ttl" type="number" min="30" max="120" required value="[% code_ttl | html %]" aria-describedby="code_ttl_hint"> seconds
+            <div class="hint" id="code_ttl_hint">Validity of each one-time authorization code (30–120).</div>
+        </li>
+    </ol>
+</fieldset>
+
+<fieldset class="rows">
+    <legend>Staff access and operations</legend>
+    <ol>
+        <li>
+            <label for="staff_policy">Allowed staff: </label>
+            <select id="staff_policy" name="staff_policy" aria-describedby="staff_policy_hint">
+                <option value="cataloguers" [% IF staff_policy == 'cataloguers' %]selected[% END %]>Cataloguers and superlibrarians</option>
+                <option value="superlibrarians" [% IF staff_policy == 'superlibrarians' %]selected[% END %]>Superlibrarians only</option>
+            </select>
+            <div class="hint" id="staff_policy_hint">Cataloguers need catalogue, plugins &rsaquo; tool and editcatalogue &rsaquo; edit_catalogue. Configuration and audit access require superlibrarian.</div>
+        </li>
+        <li>
+            <label for="button_label" class="required">Toolbar label: </label>
+            <input id="button_label" name="button_label" type="text" size="30" maxlength="80" required value="[% button_label | html %]" aria-describedby="button_label_hint">
+            <span class="required">Required</span>
+            <div class="hint" id="button_label_hint">Text of the button on the bibliographic record toolbar.</div>
+        </li>
+        <li>
+            <label for="health_ips">Health check IPs: </label>
+            <input id="health_ips" name="health_ips" type="text" size="50" value="[% health_ips | html %]" aria-describedby="health_ips_hint">
+            <div class="hint" id="health_ips_hint">Comma-separated IPs of the application server for the connection test. Blank disables network diagnostics. Loopback and link-local addresses are not allowed.</div>
+        </li>
+        <li>
+            <label for="audit_retention" class="required">Audit retention: </label>
+            <input id="audit_retention" name="audit_retention" type="number" min="1" max="3650" required value="[% audit_retention | html %]" aria-describedby="audit_retention_hint"> days
+            <div class="hint" id="audit_retention_hint">Applied by the daily maintenance command; nothing is deleted during staff requests.</div>
+        </li>
+    </ol>
+</fieldset>
+
+<fieldset class="action mm-form-actions">
+    <button class="btn btn-primary" type="submit"><i class="fa fa-save" aria-hidden="true"></i> Save configuration</button>
+    <a class="cancel" href="/cgi-bin/koha/plugins/plugins-home.pl">Cancel</a>
+    <a class="btn btn-default mm-push-right" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=tool"><i class="fa fa-tachometer" aria-hidden="true"></i> Dashboard</a>
+</fieldset>
+</form>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]

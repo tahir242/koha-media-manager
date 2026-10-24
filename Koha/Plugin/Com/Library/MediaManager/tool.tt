@@ -1,0 +1,84 @@
+[% USE Koha %]
+[% SET mm_form_csrf = Koha.GenerateCSRF || mm_csrf_token %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Media Asset Management (MAM) &rsaquo; Plugins &rsaquo; Koha</title>
+[% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE "$PLUGIN_DIR/layout.tt" %]
+</head>
+<body id="plug_mediamanager_tool" class="plugins">
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+[% INCLUDE "$PLUGIN_DIR/breadcrumbs.tt" mm_crumb='Media Asset Management (MAM)' mm_parent=0 %]
+
+<div class="main container-fluid mm-page">
+<h1>Media Asset Management (MAM)</h1>
+<p class="mm-lead">Staff open the MAM from the <em>Attach Media</em> button on any bibliographic record (it opens in a new tab).</p>
+
+<div class="mm-actions">
+    [% IF mam_url %]
+    <a class="btn btn-primary" href="[% mam_url | url %]/staff"><i class="fa fa-external-link" aria-hidden="true"></i> Go to MAM</a>
+    [% END %]
+    <a class="btn btn-default" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=configure"><i class="fa fa-pencil" aria-hidden="true"></i> Configure</a>
+    <form method="post" action="/cgi-bin/koha/plugins/run.pl">
+        <input type="hidden" name="class" value="[% CLASS | html %]"><input type="hidden" name="method" value="tool">
+        <input type="hidden" name="op" value="cud-test"><input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+        <button type="submit" class="btn btn-default"><i class="fa fa-plug" aria-hidden="true"></i> Test connection</button>
+    </form>
+</div>
+
+[% IF health %]<div class="alert [% IF health.reachable && health.compatible %]alert-success[% ELSE %]alert-warning[% END %]" role="status">[% health.message | html %]</div>[% END %]
+
+<div class="page-section">
+    <h2>Status</h2>
+    <table class="table table-striped mm-status"><tbody>
+        <tr><th scope="row">Configured</th><td>[% IF is_configured %]Yes[% ELSE %]No: open Configure[% END %]</td></tr>
+        <tr><th scope="row">Application</th><td>[% mam_url || '—' | html %]</td></tr>
+        <tr><th scope="row">Allow HTTP</th><td>[% IF insecure_http %]Yes (test networks only)[% ELSE %]No (HTTPS required)[% END %]</td></tr>
+        <tr><th scope="row">Connection</th><td>[% IF health %][% IF health.reachable && health.compatible %]OK[% ELSE %]Problem: see message above[% END %][% ELSE %]Not tested yet[% END %]</td></tr>
+        <tr><th scope="row">Storage</th><td>[% IF storage_ok %]OK[% ELSE %]Unavailable[% END %]</td></tr>
+    </tbody></table>
+</div>
+
+<div class="page-section">
+    <h2>Audit log</h2>
+    <form class="mm-filter" method="get" action="/cgi-bin/koha/plugins/run.pl">
+        <input type="hidden" name="class" value="[% CLASS | html %]"><input type="hidden" name="method" value="tool">
+        <div class="mm-filter-field">
+            <label for="event">Event:</label>
+            <input id="event" name="event" type="text" value="[% event | html %]" placeholder="e.g. sso_exchange_success" aria-describedby="event_hint">
+            <div class="hint" id="event_hint">Exact event name, or blank for all. Times are UTC; kept [% audit_retention | html %] days.</div>
+        </div>
+        <button class="btn btn-default" type="submit"><i class="fa fa-filter" aria-hidden="true"></i> Filter</button>
+    </form>
+    <div class="table-responsive"><table class="table table-striped">
+        <thead><tr><th>ID</th><th>UTC time</th><th>User / patron</th><th>Biblio</th><th>Event</th><th>Status</th><th>Source IP</th><th>Details</th></tr></thead>
+        <tbody>
+        [% FOREACH log IN logs %]<tr>
+            <td>[% log.id | html %]</td><td>[% log.utc_time | html %]</td>
+            <td>[% log.userid | html %] / [% log.borrowernumber | html %]</td><td>[% log.biblionumber | html %]</td>
+            <td>[% log.action | html %]</td><td>[% log.status | html %]</td><td>[% log.ip_address | html %]</td><td class="mm-details">[% log.details | html %]</td>
+        </tr>[% END %]
+        [% UNLESS logs.size %]<tr><td colspan="8">No matching events.</td></tr>[% END %]
+        </tbody>
+    </table></div>
+
+    [% SET mm_base = page_base %]
+    <div class="mm-pager">
+        <span class="mm-pager-info">[% IF total %]Showing [% first_row | html %]–[% last_row | html %] of [% total | html %][% ELSE %]0 events[% END %]</span>
+        [% IF pages > 1 %]
+        <nav aria-label="Audit log pages">
+            <ul class="pagination">
+                <li class="page-item[% UNLESS previous %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %]1" aria-label="First page">&laquo;</a></li>
+                <li class="page-item[% UNLESS previous %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% previous || 1 | html %]" aria-label="Previous page">&lsaquo;</a></li>
+                [% FOREACH n IN page_numbers %]
+                <li class="page-item[% IF n == page %] active[% END %]"><a class="page-link" href="[% mm_base | html %][% n | html %]" [% IF n == page %]aria-current="page"[% END %]>[% n | html %]</a></li>
+                [% END %]
+                <li class="page-item[% UNLESS next %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% next || pages | html %]" aria-label="Next page">&rsaquo;</a></li>
+                <li class="page-item[% UNLESS next %] disabled[% END %]"><a class="page-link" href="[% mm_base | html %][% pages | html %]" aria-label="Last page">&raquo;</a></li>
+            </ul>
+        </nav>
+        [% END %]
+    </div>
+</div>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]

@@ -1,0 +1,17 @@
+# Generated plugin archives
+*.kpz
+*.zip
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+.aws/
+
+# Editor files
+.idea/
+.vscode/
+*.swp
+*~
+Thumbs.db
+.DS_Store

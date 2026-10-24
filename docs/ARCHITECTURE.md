@@ -1,6 +1,6 @@
 # Architecture
 
-Koha owns staff identity, sessions, permissions and record existence. The SIUT DAM
+Koha owns staff identity, sessions, permissions and record existence. The DAM
 (separate Laravel application)
 owns its sessions, media processing/storage/viewers and MARC 856 publication through
 supported Koha APIs. This repository implements only the integration bridge.

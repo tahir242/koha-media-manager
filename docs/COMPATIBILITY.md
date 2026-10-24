@@ -3,7 +3,7 @@
 Source review 2026-10-21; runtime test 2026-10-23.
 
 **Runtime-tested:** plugin 2.2.x/2.3.0 on a Koha **26.05** test server (plain HTTP with **Allow HTTP**),
-together with the SIUT DAM: install and upgrade by KPZ, Configure and dashboard pages, toolbar
+together with the DAM: install and upgrade by KPZ, Configure and dashboard pages, toolbar
 button, the full code-v2 sign-in, REST exchange route, connection test, audit log, and the DAM's
 metadata read and 856 publication through Koha's REST API. Not runtime-tested: HTTPS behind a
 reverse proxy, other Koha releases (22.11–25.11), concurrency on multiple Plack workers under load.

@@ -68,7 +68,7 @@ Isolated suite: 228 assertions passed (Git's bundled Perl). The real database co
 test is included but was skipped (no disposable DBI database here).
 
 Runtime (2026-10-23, Koha 26.05 test server, plain HTTP with **Allow HTTP**, together with
-the SIUT DAM): items 1–5 and 10 above were exercised in the browser (install/upgrade,
+the DAM): items 1–5 and 10 above were exercised in the browser (install/upgrade,
 CSRF-protected configuration, toolbar, full round trip, audit pages and pagination), plus the
 connection test and the exchange error answers (401 invalid_client, 400 invalid_grant). Not yet
 done: items 6–9 and 11 over HTTPS, under multiple workers, and maintenance/uninstall.

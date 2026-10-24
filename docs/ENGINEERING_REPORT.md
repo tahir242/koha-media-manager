@@ -3,7 +3,7 @@
 Completed implementation review: 2026-10-23. Current version: **2.3.0**.
 
 > Sections 1–10 describe the 2.0.0 hardening as delivered; per-version changes follow.
-> Since then the plugin has been runtime-tested on a Koha 26.05 test server with the SIUT DAM
+> Since then the plugin has been runtime-tested on a Koha 26.05 test server with the DAM
 > (see COMPATIBILITY.md and TESTING.md), which supersedes the "not runtime-tested" statements below.
 Branch: **feature/plugin-security-hardening**.
 Base: initial beta commit **4c7f526**, clean main working tree when work began.
@@ -173,7 +173,7 @@ SSO protections are unchanged. Five new regression assertions cover this behavio
   rows record `transport: insecure_http_test`. Production behaviour is unchanged when unset.
 * Fixed `tool()`: an early `return` inside `eval` printed a second "Service unavailable"
   page after the access-denied or CSRF error page.
-* Interoperability verified end to end against the SIUT DAM code-v2 consumer by driving this
+* Interoperability verified end to end against the DAM code-v2 consumer by driving this
   plugin's real `_authorize`, `_complete` and `Controller::exchange` code (Koha internals mocked
   with t/lib/MockKoha.pm) from a running DAM instance: start, continue, callback, exchange,
   state verification and session creation all succeeded; unknown code (400 invalid_grant),

@@ -19,7 +19,7 @@ our $VERSION = '2.3.0';
 our $metadata = {
     name=>'Media Asset Management (MAM)', author=>'Tahir Ali Channa',
     description=>'Adds an "Upload Secure Media" button to bibliographic records. One click signs staff in to the '
-        .'SIUT Digital Asset Management application (no second password), where they upload, review and publish '
+        .'Digital Asset Management application (no second password), where they upload, review and publish '
         .'digital files for that record.',
     date_authored=>'2026-10-21', date_updated=>'2026-10-24',
     minimum_version=>'22.1100000', maximum_version=>undef, version=>$VERSION,

@@ -1,6 +1,6 @@
 # DAM to Koha REST integration
 
-The SIUT DAM uses the Koha staff URL from its configuration (`KOHA_STAFF_URL`, API under
+The DAM uses the Koha staff URL from its configuration (`KOHA_STAFF_URL`, API under
 /api/v1); it is never inferred from browser input. Implementation and details: the DAM's
 `app/Koha/KohaClient.php` and `docs/KOHA_INTEGRATION.md`. Its API service identity is separate from the plugin exchange
 credential and from the staff identity returned by SSO.
@@ -25,7 +25,7 @@ References: [22.11 REST Auth](https://github.com/Koha-Community/Koha/blob/v22.11
 |---|---|
 | GET /biblios/{biblio_id} | catalogue; use Accept: application/marcxml+xml or application/marc-in-json for MARC. Default application/json is not interchangeable with a MARC record. |
 | PUT /biblios/{biblio_id} | editcatalogue.edit_catalogue; full MARC record in Content-Type application/marcxml+xml, application/marc-in-json or application/marc. Available in inspected 23.11+ specs, absent in 22.11.00. |
-| GET /patrons/{patron_id} | 22.11 uses borrowers.edit_borrowers; 26.05 accepts borrowers.list_borrowers OR borrowers.edit_borrowers. Not used by the SIUT DAM: SSO already supplies minimal identity. |
+| GET /patrons/{patron_id} | 22.11 uses borrowers.edit_borrowers; 26.05 accepts borrowers.list_borrowers OR borrowers.edit_borrowers. Not used by the DAM: SSO already supplies minimal identity. |
 
 Use separate read/write service identities when practical. Do not grant superlibrarian.
 An API service account's ability to update a record does not authorize the current DAM

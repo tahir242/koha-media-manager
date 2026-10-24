@@ -1,7 +1,7 @@
 # SSO protocol: code-v2
 
 This confidential-client authorization exchange is not an OAuth2/OIDC provider.
-Koha's own OAuth2 API authentication is separate. The consumer is the separate SIUT DAM
+Koha's own OAuth2 API authentication is separate. The consumer is the separate DAM
 application (Laravel, `App\Auth\Sso\CodeExchangeAdapter`); it is not part of this repository.
 
 ## URLs

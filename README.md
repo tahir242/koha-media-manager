@@ -3,7 +3,7 @@
 Version **2.3.0** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
 
 Adds an **Upload Secure Media** button to every bibliographic record in the Koha staff
-interface. One click signs the staff member in to the SIUT Digital Asset Management (MAM)
+interface. One click signs the staff member in to the Digital Asset Management (MAM)
 application (no second password) and opens that record there, where files are uploaded,
 reviewed and published. The plugin stores no media and never edits records itself.
 
@@ -119,7 +119,7 @@ Installation creates four tables (`…_log`, `…_codes`, `…_requests`, `…_r
 
 | Field | Value / rule | Default |
 |---|---|---|
-| Application URL | Address of the MAM, e.g. `https://dam.khi.siut.org` (HTTP and IP:port allowed only with Allow HTTP) | — |
+| Application URL | Address of the MAM, e.g. `https://dam.example.org` (HTTP and IP:port allowed only with Allow HTTP) | — |
 | Allow HTTP | Tick only on an isolated test network without HTTPS | off |
 | Instance ID | 1–64 letters/digits/`._-`; must equal the MAM's `KOHA_INSTANCE_ID` | — |
 | Client ID | Same syntax; must equal the MAM's `KOHA_SSO_CLIENT_ID` | — |
@@ -165,9 +165,9 @@ The MAM needs the matching values in its `.env`:
 
 ```dotenv
 APP_URL=http://10.1.89.51:8015            # = plugin "Application URL"
-KOHA_INSTANCE_ID=siut_lib                 # = plugin "Instance ID"
+KOHA_INSTANCE_ID=mylib                    # = plugin "Instance ID"
 KOHA_STAFF_URL=http://10.1.10.50:7002     # Koha staff interface (exchange endpoint lives here)
-KOHA_SSO_CLIENT_ID=siut-dam               # = plugin "Client ID"
+KOHA_SSO_CLIENT_ID=koha-dam               # = plugin "Client ID"
 KOHA_SSO_CLIENT_SECRET=<64 hex>           # = plugin "Client secret"
 DAM_ALLOW_INSECURE_HTTP=true              # only while "Allow HTTP" is ticked
 ```

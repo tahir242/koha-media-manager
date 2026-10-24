@@ -4,7 +4,10 @@
 
 This guide is for **developers, integrators and system administrators**: architecture, the sign-in
 protocol, the security model, Koha API integration, compatibility, building, testing and releasing.
-Library staff should start with the [User Manual](USER_MANUAL.md).
+Library staff should start with the [User Manual](USER_MANUAL.md). The consuming application lives in
+the companion repository [koha-mam](https://github.com/tahir242/koha-mam); its
+[Developer Guide](https://github.com/tahir242/koha-mam/blob/main/docs/DEVELOPER_GUIDE.md) covers processing,
+publishing, the viewer and view counting.
 
 ---
 

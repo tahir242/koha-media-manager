@@ -16,6 +16,10 @@ application. Cataloguers attach digital media to a **record** or to a **specific
 work. Staff sign in automatically with their Koha identity, the media is checked and prepared for safe
 viewing, and once approved it appears in the staff interface and the OPAC.
 
+> **Two parts, one product.** This repository is the **Koha plugin**. It works together with the
+> **[MAM application (koha-mam)](https://github.com/tahir242/koha-mam)**, where media is uploaded, processed,
+> reviewed, published and viewed. Install both.
+
 ## Why libraries choose it
 
 - **One click from the catalogue** — an **Attach Media** button on every record and an **Attach Media**
@@ -49,7 +53,8 @@ viewing, and once approved it appears in the staff interface and the OPAC.
    template cache.
 3. **Configure** it: *Plugins → Media Asset Management (MAM) → Configure* — enter the MAM address,
    an Instance ID, a Client ID and a secret (`openssl rand -hex 32`).
-4. **Connect** the MAM with the same values and press **Test connection** on the plugin dashboard.
+4. **Install the MAM** from [koha-mam releases](https://github.com/tahir242/koha-mam/releases), give it the same
+   values and press **Test connection** on the plugin dashboard.
 
 Full instructions: **[User Manual](docs/USER_MANUAL.md)**.
 
@@ -57,7 +62,7 @@ Full instructions: **[User Manual](docs/USER_MANUAL.md)**.
 
 - Koha 26.05 (minimum 22.11) with plugins enabled
 - HTTPS on the staff interface (a test-only *Allow HTTP* switch exists for isolated test networks)
-- The MAM application, reachable by staff browsers and able to reach Koha's REST API
+- The [MAM application](https://github.com/tahir242/koha-mam), reachable by staff browsers and able to reach Koha's REST API
 
 ## Documentation
 
@@ -66,6 +71,7 @@ Full instructions: **[User Manual](docs/USER_MANUAL.md)**.
 | [User Manual](docs/USER_MANUAL.md) | Librarians and Koha administrators: installation, configuration, daily use, troubleshooting, FAQ |
 | [Developer Guide](docs/DEVELOPER_GUIDE.md) | Developers and integrators: architecture, sign-in protocol, security model, Koha API, building, testing, releases |
 | [Changelog](CHANGELOG.md) | What changed in each release |
+| [MAM application](https://github.com/tahir242/koha-mam) | The media side: User Guide, Developer Guide, view statistics, publishing |
 
 ## Build from source
 

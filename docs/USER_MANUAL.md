@@ -49,7 +49,9 @@ The solution has two parts:
 
 - **This Koha plugin** — the button, the menu entries, the secure sign-in, administration and audit log.
 - **The MAM application** — a separate web application where files are uploaded, checked, converted for
-  viewing, reviewed, approved and published back to Koha.
+  viewing, reviewed, approved and published back to Koha, with view statistics. It has its own repository,
+  releases and [User Guide](https://github.com/tahir242/koha-mam/blob/main/docs/USER_GUIDE.md):
+  **[github.com/tahir242/koha-mam](https://github.com/tahir242/koha-mam)**.
 
 ## 2. How it works for staff
 
@@ -83,7 +85,7 @@ The solution has two parts:
   perl -MBytes::Random::Secure -MIO::Socket::SSL -MDigest::SHA -MJSON::PP -e 'print "OK\n"'
   ```
 
-**MAM application**
+**MAM application** ([koha-mam](https://github.com/tahir242/koha-mam/releases))
 
 - Reachable from staff browsers, and able to reach the Koha staff interface (for the sign-in exchange
   and the REST API).

@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 [Semantic Versioning](https://semver.org/). The release workflow publishes the section that matches the
 tagged version as the GitHub release notes.
 
+Companion application: [koha-mam](https://github.com/tahir242/koha-mam).
+
 ## [1.0.0] - 2026-10-24
 
 First public release (beta).

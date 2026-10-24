@@ -1,6 +1,6 @@
 # Engineering report
 
-Completed implementation review: 2026-10-23. Current version: **2.3.0**.
+Completed implementation review: 2026-10-23. Current version: **2.4.0** (2026-10-24).
 
 > Sections 1–10 describe the 2.0.0 hardening as delivered; per-version changes follow.
 > Since then the plugin has been runtime-tested on a Koha 26.05 test server with the DAM
@@ -230,3 +230,21 @@ t/plugin.t now asserts the relative target and that it maps to the real controll
   table and an audit log with numbered pagination (20 per page, first/previous/next/last, "Showing x–y of N").
 * Shorter plugin description and README introduction.
 * New test t/dashboard.t (pagination); configure/insecure_http tests updated for the checkbox.
+
+## 2.4.0 fixes and usability
+
+* **Configuration save no longer reports a false error.** `configure()` looked up the staff user
+  inside the save transaction; `check_cookie_auth` creates a CGI::Session whose DBI driver commits
+  any open transaction when it is destroyed. The settings were committed early and the final
+  `commit` then failed, so "Configuration could not be saved." appeared although everything was saved.
+  The lookup now happens before the transaction, and real save failures are logged to the Koha error log.
+* **The MAM opens in a new tab** (`target="_blank" rel="noopener"`), so staff keep their place in Koha
+  and the browser Back button no longer lands on a used single-use hand-off step.
+* **Button renamed to "Attach Media"** (paperclip icon). Installs still on the old default
+  "Upload Secure Media" are renamed on upgrade; custom labels are kept.
+* Plugin version removed from the Configure and Dashboard page introductions.
+* Build scripts moved to `scripts/`: `build_kpz.ps1`, new `build_kpz.bat` (Windows, no
+  execution-policy change) and `build_kpz.sh` (Linux/macOS, wraps `build_kpz.py`). The PowerShell
+  builder hashes with .NET because `Get-FileHash` is missing when started from PowerShell 7.
+* Tests: configure.t regression test with a DBI-like commit mock; plugin.t covers the new tab,
+  screen-reader text and label migration.

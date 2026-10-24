@@ -238,6 +238,10 @@ sub configure {
         push @errors,'A new client secret is required for first configuration.'
             unless length($secret) || $self->retrieve_data('client_secret_hash');
         if (!@errors) {
+            # Look up the staff user before the transaction: check_cookie_auth creates a
+            # CGI::Session whose DBI driver commits any open transaction when destroyed.
+            my ($p) = $self->_staff($cgi);
+            my $who = {userid=>$p->userid,patron_id=>$p->borrowernumber};
             my $dbh = $self->_db;
             eval {
                 $dbh->begin_work or die 'Transaction unavailable';
@@ -254,15 +258,15 @@ sub configure {
                 }
                 my $was_http = ($self->retrieve_data('insecure_http') // '') eq '1' ? 1 : 0;
                 $self->store_data({%$clean, insecure_http=>$allow_http ? '1' : '0'});
-                my ($p) = $self->_staff($cgi);
-                my $who = {userid=>$p->userid,patron_id=>$p->borrowernumber};
                 $self->_audit('configuration_updated','success',$who,{});
                 $self->_audit($allow_http ? 'insecure_http_enabled' : 'insecure_http_disabled','success',$who,{})
                     if $was_http != $allow_http;
                 $dbh->commit or die 'Commit failed';
                 1;
             } or do {
+                my $error = $@ || 'unknown error';
                 eval { $dbh->rollback unless $dbh->{AutoCommit} };
+                warn "MediaManager: configuration save failed: $error";
                 push @errors,'Configuration could not be saved.';
             };
             $saved = !@errors;

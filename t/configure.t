@@ -9,7 +9,8 @@ use Koha::Plugin::Com::Library::MediaManager::Security qw(secret_hash);
     package ConfigDB;
     sub begin_work { $_[0]->{AutoCommit}=0; 1 }
     sub selectrow_array { 1000 }
-    sub commit { $_[0]->{AutoCommit}=1; 1 }
+    # Like DBI: commit is ineffective (false) once AutoCommit is back on.
+    sub commit { return 0 if $_[0]->{AutoCommit}; $_[0]->{AutoCommit}=1; 1 }
     sub rollback { $_[0]->{AutoCommit}=1; 1 }
     package ConfigTemplate;
     sub param { my ($s,%p)=@_; $s->{params}=\%p; }
@@ -29,6 +30,18 @@ $p->{data}={mam_url=>'https://dam.example.org',instance_id=>'library',client_id=
 local $Koha::Patrons::patron->{flags}=1;
 local $ENV{HTTPS}='on';
 local %CGI::params=%{$p->_config};
+{
+    # Koha's CGI::Session DBI driver commits an open transaction when the session is destroyed.
+    no warnings qw(redefine once);
+    local *Koha::Plugin::Com::Library::MediaManager::check_cookie_auth=sub {
+        $p->_db->{AutoCommit}=1;
+        return ($C4::Auth::status,$C4::Auth::session);
+    };
+    $p->configure;
+    my $view=JSON::PP::decode_json($p->{output});
+    ok($view->{saved},'save reports success: no session lookup inside the transaction');
+    is_deeply($view->{errors},[],'no false "could not be saved" error');
+}
 $p->configure;
 is($p->retrieve_data('client_secret_hash'),secret_hash('a' x 64),'blank input preserves secret');
 unlike($p->{output},qr/@{[secret_hash('a' x 64)]}/,'stored digest never rendered');

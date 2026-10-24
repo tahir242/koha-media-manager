@@ -15,7 +15,7 @@ ticked). Field names below are the labels on the Configure page.
 | Client secret | 64 lowercase hex characters generated from 32 cryptographically random bytes; blank keeps the stored one |
 | Rotation overlap | 120–3600 seconds; default 300 |
 | Allowed staff | cataloguers and superlibrarians (default), or superlibrarians only |
-| Toolbar label | 1–80 printable characters, HTML-escaped; default Upload Secure Media |
+| Toolbar label | 1–80 printable characters, HTML-escaped; default Attach Media (installs still on the old default "Upload Secure Media" are renamed on upgrade) |
 | Health check IPs | Optional canonical IPv4 allowlist for **Test connection**; excludes loopback, unspecified, link-local, multicast |
 | Audit retention | 1–3650 days; default 90, applied only by maintenance |
 

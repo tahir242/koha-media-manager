@@ -17,6 +17,20 @@ like($html,qr/method="post"/,'native action is POST');
 like($html,qr/name="csrf_token"/,'native action includes CSRF');
 unlike($html,qr/<script>/,'label escaped');
 is(()=$html=~/id="media-manager-action"/g,1,'one native button');
+like($html,qr/target="_blank" rel="noopener"/,'MAM opens in a new tab without opener access');
+like($html,qr/opens in a new tab/,'new tab announced to screen readers');
+{
+    my $old=Koha::Plugin::Com::Library::MediaManager->new({});
+    $old->{data}={button_label=>'Upload Secure Media'};
+    $old->_defaults;
+    is($old->retrieve_data('button_label'),'Attach Media','old default label renamed on upgrade');
+    $old->{data}={button_label=>'Add files'};
+    $old->_defaults;
+    is($old->retrieve_data('button_label'),'Add files','custom label kept on upgrade');
+    $old->{data}={};
+    $old->_defaults;
+    is($old->retrieve_data('button_label'),'Attach Media','new install default');
+}
 ok(!$p->can('intranet_js'),'no duplicate JS insertion path');
 {
     local $CGI::params{biblionumber}=0;

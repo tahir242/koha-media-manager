@@ -4,7 +4,7 @@ use Test::More;
 use lib '.';
 use Koha::Plugin::Com::Library::MediaManager::Security qw(valid_id validate_config secret_hash secret_matches html_escape);
 my %good = (mam_url=>'https://dam.example.org/base/',instance_id=>'library',client_id=>'dam',
-    code_ttl=>60,rotation_grace=>300,audit_retention=>90,button_label=>'Upload Secure Media',
+    code_ttl=>60,rotation_grace=>300,audit_retention=>90,button_label=>'Attach Media',
     staff_policy=>'cataloguers',health_ips=>'10.0.0.5,192.168.1.20');
 my ($cfg,$err)=validate_config(\%good);
 is_deeply($err,[],'valid configuration');

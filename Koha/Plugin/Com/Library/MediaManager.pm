@@ -15,10 +15,10 @@ use Koha::Plugin::Com::Library::MediaManager::Security qw(valid_id validate_conf
 use Koha::Plugin::Com::Library::MediaManager::Store;
 use Koha::Plugin::Com::Library::MediaManager::Health;
 
-our $VERSION = '2.3.0';
+our $VERSION = '2.4.0';
 our $metadata = {
     name=>'Media Asset Management (MAM)', author=>'Tahir Ali Channa',
-    description=>'Adds an "Upload Secure Media" button to bibliographic records. One click signs staff in to the '
+    description=>'Adds an "Attach Media" button to bibliographic records. One click signs staff in to the '
         .'Digital Asset Management application (no second password), where they upload, review and publish '
         .'digital files for that record.',
     date_authored=>'2026-10-21', date_updated=>'2026-10-24',
@@ -80,12 +80,15 @@ sub _defaults {
     my ($self) = @_;
     my %defaults = (
         protocol=>'code-v2', code_ttl=>'60', rotation_grace=>'300',
-        audit_retention=>'90', button_label=>'Upload Secure Media',
+        audit_retention=>'90', button_label=>'Attach Media',
         staff_policy=>'cataloguers', health_ips=>'', schema_version=>'2',
     );
     for my $key (keys %defaults) {
         $self->store_data({$key=>$defaults{$key}}) unless defined $self->retrieve_data($key);
     }
+    # Rename the pre-2.4 default label; a label chosen by the administrator is kept.
+    $self->store_data({button_label=>'Attach Media'})
+        if ($self->retrieve_data('button_label') // '') eq 'Upload Secure Media';
     # Existing mam_url, shared_secret and allowed_permissions are preserved for rollback.
     # Legacy secrets are never promoted to v2 authentication credentials.
     return 1;
@@ -292,11 +295,12 @@ sub intranet_catalog_biblio_enhancements_toolbar_button {
     my $csrf = html_escape($self->_csrf($cgi));
     my $label = html_escape($self->retrieve_data('button_label'));
     my $class = html_escape(ref $self);
-    return qq{<div class="btn-group" id="media-manager-action"><form method="post" action="/cgi-bin/koha/plugins/run.pl" style="display:inline">
+    # The MAM opens in a new tab so staff keep their place in Koha while uploading.
+    return qq{<div class="btn-group" id="media-manager-action"><form method="post" action="/cgi-bin/koha/plugins/run.pl" target="_blank" rel="noopener" style="display:inline">
 <input type="hidden" name="class" value="$class"><input type="hidden" name="method" value="tool">
 <input type="hidden" name="op" value="cud-authorize"><input type="hidden" name="csrf_token" value="$csrf">
 <input type="hidden" name="biblionumber" value="$id">
-<button class="btn btn-default" type="submit"><i class="fa fa-upload" aria-hidden="true"></i> $label</button></form></div>};
+<button class="btn btn-default" type="submit" title="Opens in a new tab"><i class="fa fa-paperclip" aria-hidden="true"></i> $label<span class="sr-only"> (opens in a new tab)</span></button></form></div>};
 }
 
 sub tool {

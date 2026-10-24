@@ -1,8 +1,8 @@
 # Koha Media Manager
 
-Version **2.3.0** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
+Version **2.4.0** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
 
-Adds an **Upload Secure Media** button to every bibliographic record in the Koha staff
+Adds an **Attach Media** button to every bibliographic record in the Koha staff
 interface. One click signs the staff member in to the Digital Asset Management (MAM)
 application (no second password) and opens that record there, where files are uploaded,
 reviewed and published. The plugin stores no media and never edits records itself.
@@ -43,7 +43,7 @@ The plugin implements the **code-v2** hand-off: the browser only ever carries op
 single-use values, and identity is handed over server-to-server.
 
 ```
-Staff clicks "Upload Secure Media" on a record (POST + Koha CSRF token)
+Staff clicks "Attach Media" on a record (opens in a new tab) (POST + Koha CSRF token)
  Koha ──303──► MAM  /sso/koha/start?request={64 hex}          opaque initiation, bound to the Koha session
  MAM  ──303──► Koha run.pl?…&op=continue&request&state        MAM adds its own single-use browser state
  Koha (auto-POST op=cud-complete, same staff session)          permissions re-checked, code issued (60 s)
@@ -127,7 +127,7 @@ Installation creates four tables (`…_log`, `…_codes`, `…_requests`, `…_r
 | Rotation overlap | Seconds the previous secret is still accepted after a change (120–3600) | 300 |
 | Code lifetime | Seconds an authorization code is valid (30–120) | 60 |
 | Allowed staff | Cataloguers and superlibrarians, or superlibrarians only | cataloguers |
-| Toolbar label | Button text (1–80 characters) | Upload Secure Media |
+| Toolbar label | Button text (1–80 characters) | Attach Media |
 | Health check IPs | IPv4 addresses the connection test may contact (blank disables the test) | — |
 | Audit retention | Days to keep audit rows (1–3650) | 90 |
 

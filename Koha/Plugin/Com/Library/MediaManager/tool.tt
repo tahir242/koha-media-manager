@@ -12,7 +12,7 @@
 
 <div class="main container-fluid mm-page">
 <h1>Media Asset Management (MAM)</h1>
-<p class="mm-lead">Staff open the MAM from the <em>Upload Secure Media</em> button on any bibliographic record.</p>
+<p class="mm-lead">Staff open the MAM from the <em>Attach Media</em> button on any bibliographic record (it opens in a new tab).</p>
 
 <div class="mm-actions">
     [% IF mam_url %]

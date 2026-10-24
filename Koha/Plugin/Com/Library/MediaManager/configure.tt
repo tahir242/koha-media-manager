@@ -12,7 +12,7 @@
 
 <div class="main container-fluid mm-page">
 <h1>Media Asset Management (MAM) configuration</h1>
-<p class="mm-lead">Plugin version <strong>[% mm_version | html %]</strong>. Connects the Koha staff interface to the Digital Asset Management application.</p>
+<p class="mm-lead">Connects the Koha staff interface to the Digital Asset Management application.</p>
 
 [% IF saved %]<div class="alert alert-success" role="status"><i class="fa fa-check" aria-hidden="true"></i> Configuration saved.</div>[% END %]
 [% FOREACH error IN errors %]<div class="alert alert-danger" role="alert">[% error | html %]</div>[% END %]

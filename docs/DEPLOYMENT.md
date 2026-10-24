@@ -31,8 +31,9 @@ Verify certificate authorities are installed. Do not install test mocks in produ
 
 ## Package and enable
 
-PowerShell: **./build_kpz.ps1**. Linux/macOS with Python 3.8+:
-**python3 scripts/build_kpz.py**. Both package only the explicit production file list,
+Windows: **scripts\build_kpz.bat** (or **./scripts/build_kpz.ps1** in PowerShell). Linux/macOS with
+Python 3.8+: **./scripts/build_kpz.sh** (or **python3 scripts/build_kpz.py**). The .bat and .sh files
+only call the PowerShell and Python builders. Both builders package only the explicit production file list,
 under Koha/Plugin/Com/Library/, including all modules/templates and openapi.json.
 They validate contents and print SHA-256. Tests, docs, scripts and secrets are excluded.
 

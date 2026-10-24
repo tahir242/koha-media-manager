@@ -84,12 +84,16 @@ The full contract for any consuming application is in [docs/SSO_PROTOCOL.md](doc
 
 ## Build
 
+All builders write `MediaManager.kpz` to the repository root and print its SHA-256.
+
 ```powershell
-./build_kpz.ps1                 # writes MediaManager.kpz
+scripts\build_kpz.bat           # Windows: double-click or run from cmd (no execution-policy change needed)
+./scripts/build_kpz.ps1         # Windows PowerShell
 ```
 
 ```bash
-python3 scripts/build_kpz.py    # same result on Linux/macOS
+./scripts/build_kpz.sh          # Linux/macOS (needs Python 3.8+)
+python3 scripts/build_kpz.py    # same, called directly
 ```
 
 The KPZ entries carry the build time, so Koha's template cache picks up changed templates after an upgrade.
@@ -234,7 +238,7 @@ Koha/Plugin/Com/Library/MediaManager.pm   plugin class: install/upgrade, toolbar
   MediaManager/Health.pm                  connection test (approved IPs, no redirects)
   MediaManager/openapi.json               REST route definition
   MediaManager/*.tt                       configure, dashboard, continue, error pages, layout, breadcrumbs
-scripts/build_kpz.py, build_kpz.ps1       KPZ builders
+scripts/build_kpz.{ps1,bat,py,sh}         KPZ builders (.bat wraps .ps1, .sh wraps .py)
 scripts/maintenance.pl                    daily purge and retention
 t/                                        tests (t/lib/MockKoha.pm, t/integration)
 docs/                                     detailed documentation

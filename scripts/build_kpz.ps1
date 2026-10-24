@@ -5,7 +5,8 @@ if ([IO.Path]::GetFileName($OutputName) -ne $OutputName -or $OutputName -notmatc
 }
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$projectRoot = $PSScriptRoot
+# The script lives in scripts/; the package is built from and written to the repository root.
+$projectRoot = Split-Path -Parent $PSScriptRoot
 $pluginRoot = Join-Path $projectRoot 'Koha/Plugin/Com/Library'
 $relativeFiles = @('MediaManager.pm') + @(Get-ChildItem -LiteralPath (Join-Path $pluginRoot 'MediaManager') -File |
     Where-Object { $_.Extension -in '.pm','.tt','.json' } | ForEach-Object { 'MediaManager/' + $_.Name })
@@ -39,7 +40,11 @@ try {
         }
     } finally { $check.Dispose() }
     Move-Item -LiteralPath $tempPath -Destination $outPath -Force
-    Get-FileHash -LiteralPath $outPath -Algorithm SHA256
+    # .NET hash, not Get-FileHash: that cmdlet is missing when Windows PowerShell is started from PowerShell 7.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($outPath)
+    try { $hash = -join ($sha.ComputeHash($stream) | ForEach-Object { $_.ToString('x2') }) } finally { $stream.Dispose(); $sha.Dispose() }
+    Write-Output "${OutputName}: SHA256 $hash"
 } finally {
     if (Test-Path -LiteralPath $tempPath) { Remove-Item -LiteralPath $tempPath }
 }

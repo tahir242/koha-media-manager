@@ -7,6 +7,13 @@ tagged version as the GitHub release notes.
 
 Companion application: [koha-mam](https://github.com/tahir242/koha-mam).
 
+## [Unreleased]
+
+### Changed
+
+- Licensed under the GNU General Public License v3.0 or later (GPL-3.0-or-later), like Koha: `LICENSE`
+  file and a license notice in every Perl module.
+
 ## [1.1.0] - 2026-10-26
 
 **Go to MAM** needs MAM 1.1.0 or later (it must accept sign-ins without a record); record and item

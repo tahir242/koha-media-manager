@@ -1,6 +1,6 @@
 # Media Asset Management (MAM) for Koha — User Manual
 
-**Version 1.0.0 (beta)** · For Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
+**Version 1.1.0 (beta)** · For Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
 
 This manual is for **library staff and Koha administrators**: what the plugin does, how to install
 and configure it, and how cataloguers use it every day. Developers and integrators should read the
@@ -95,7 +95,7 @@ The solution has two parts:
 ## 4. Installation
 
 1. **Back up** the Koha database (at least the plugin tables and `plugin_data`).
-2. Download `koha-media-manager-v1.0.0-beta.kpz` from the project's **GitHub Releases** page
+2. Download `koha-media-manager-v1.1.0-beta.kpz` from the project's **GitHub Releases** page
    (or build it yourself — see the [Developer Guide](DEVELOPER_GUIDE.md#9-building-the-plugin-package)).
 3. In Koha: **Administration → Plugins → Manage plugins → Upload plugin**, choose the `.kpz` file.
 4. Enable the plugin if it is not already enabled.

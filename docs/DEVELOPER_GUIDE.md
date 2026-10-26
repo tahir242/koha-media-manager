@@ -1,6 +1,6 @@
 # Media Asset Management (MAM) for Koha — Developer Guide
 
-**Version 1.0.0 (beta)** · Plugin class `Koha::Plugin::Com::Library::MediaManager` · Author: Tahir Ali Channa
+**Version 1.1.0 (beta)** · Plugin class `Koha::Plugin::Com::Library::MediaManager` · Author: Tahir Ali Channa
 
 This guide is for **developers, integrators and system administrators**: architecture, the sign-in
 protocol, the security model, Koha API integration, compatibility, building, testing and releasing.

@@ -27,7 +27,7 @@ jobs:
       - name: Install Perl dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libio-socket-ssl-perl libjson-perl liburi-perl
+          sudo apt-get install -y -qq libio-socket-ssl-perl libjson-perl liburi-perl libjson-validator-perl
 
       - name: Run the test suite
         run: prove t/*.t

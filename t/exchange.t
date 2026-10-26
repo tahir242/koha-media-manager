@@ -12,10 +12,12 @@ use Koha::Plugin::Com::Library::MediaManager::Security qw(secret_hash);
     our $status='success';
     our $item_id;
     our $biblio_id=123;
+    our ($correlation_id,$browser_state)=('correlation',undef);
     sub consume {
         my ($s,$code,$binding,$authorize,$audit)=@_;
         my $row={patron_id=>7,biblio_id=>$biblio_id,item_id=>$item_id,branch=>'MAIN',issuer=>'library',
-            audience=>'media-manager',client_id=>'dam',issued_at=>990,expires_at=>1050,correlation_id=>'correlation'};
+            audience=>'media-manager',client_id=>'dam',issued_at=>990,expires_at=>1050,correlation_id=>$correlation_id,
+            browser_state=>$browser_state};
         my $response=$status eq 'success' ? $authorize->($row) : undef;
         my $result=($status eq 'success' && !$response) ? 'permission_denied' : $status;
         $audit->($result,$row);
@@ -122,4 +124,19 @@ for my $result (qw(replay expired invalid_grant)) {
 my $logged=JSON::PP::encode_json(\@ExchangePlugin::events);
 unlike($logged,qr/@{['a' x 64]}|@{['c' x 64]}/,'no secret or authorization code in audit data');
 like($logged,qr/sso_replay_rejected/,'replay audit event');
+SKIP: {
+    # The published response contract (openapi.json) must accept every response the plugin sends.
+    skip 'JSON::Validator not installed',3 unless eval { require JSON::Validator; 1 };
+    open my $fh,'<','Koha/Plugin/Com/Library/MediaManager/openapi.json' or die $!;
+    my $schema=JSON::PP::decode_json(do { local $/; <$fh> })->{'/exchange'}{post}{responses}{200}{schema};
+    my $validator=JSON::Validator->new->schema($schema);
+    my %grant=(record=>[123,undef],item=>[123,456],dashboard=>[undef,undef]);
+    local ($Grant::correlation_id,$Grant::browser_state)=('d' x 64,'browser-state-' . ('s' x 43));
+    for my $kind (qw(record item dashboard)) {
+        local ($Grant::biblio_id,$Grant::item_id)=@{$grant{$kind}};
+        my (undef,$body)=$p->exchange($request,'dam','a' x 64,'192.0.2.1');
+        my @errors=$validator->validate(JSON::PP::decode_json(JSON::PP::encode_json($body)));
+        is("@errors",'',"$kind grant matches the published response schema");
+    }
+}
 done_testing;

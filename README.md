@@ -6,6 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/tahir242/koha-media-manager?include_prereleases&label=release)](https://github.com/tahir242/koha-media-manager/releases)
 ![Koha](https://img.shields.io/badge/Koha-22.11%E2%80%9326.05-1f6feb)
 ![Status](https://img.shields.io/badge/status-beta-orange)
+[![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
 **Version 1.1.0 (beta)** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
 
@@ -111,6 +112,8 @@ staging server before production use, and report issues on
 
 ## License
 
-This plugin is provided as-is for library use and may be modified for institutional requirements.
+[GNU General Public License v3.0 or later](LICENSE) (GPL-3.0-or-later), the same license as Koha. You may
+use, adapt and share it; changed versions you distribute must stay under the GPL. The companion
+[MAM application](https://github.com/tahir242/koha-mam) is MIT-licensed.
 
 © 2026 Tahir Ali Channa

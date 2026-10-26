@@ -11,6 +11,14 @@
 
 ---
 
+<p align="center">
+  <img src="docs/images/attach-media-flow.gif" width="880"
+       alt="Attach Media on a Koha record opens the MAM already signed in; a scanned chapter is uploaded, approved and published, and patrons open it from the OPAC in the secure viewer.">
+</p>
+
+> **Try it in one command.** The [koha-mam demo](https://github.com/tahir242/koha-mam/tree/main/demo) runs Koha 26.05,
+> the MAM and this plugin, preconfigured: `docker compose up -d --build`.
+
 Media Asset Management (MAM) for Koha connects the Koha staff interface to a dedicated media
 application. Cataloguers attach digital media to a **record** or to a **specific item** right where they
 work. Staff sign in automatically with their Koha identity, the media is checked and prepared for safe
@@ -44,6 +52,16 @@ viewing, and once approved it appears in the staff interface and the OPAC.
 2. The MAM opens in a new tab, already signed in, on that record or item.
 3. Files are uploaded, validated and prepared for viewing.
 4. After approval, the link is added to Koha, and staff and patrons open the media in a secure viewer.
+
+## Screenshots
+
+| **Attach Media** on every record | …and on every item |
+|---|---|
+| ![The Attach Media button on the toolbar of a Koha record](docs/images/koha-record-attach-media.png) | ![Attach Media in the Actions menu of an item in the holdings table](docs/images/koha-item-attach-media.png) |
+| **Published to the OPAC** as an online resource (MARC 856) | **Plugin dashboard**: status, connection test, Go to MAM, audit log |
+| ![The OPAC record with its View digital resource link](docs/images/opac-online-resource.png) | ![The plugin dashboard in the Koha staff interface](docs/images/plugin-dashboard.png) |
+
+More screenshots of the MAM itself are in the [koha-mam README](https://github.com/tahir242/koha-mam#screenshots).
 
 ## Quick start
 

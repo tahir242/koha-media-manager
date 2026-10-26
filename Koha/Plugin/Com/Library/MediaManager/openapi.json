@@ -126,7 +126,10 @@
                 ],
                 "properties": {
                   "biblio_id": {
-                    "type": "integer",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
                     "minimum": 1
                   },
                   "branch": {

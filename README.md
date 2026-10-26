@@ -23,7 +23,7 @@ viewing, and once approved it appears in the staff interface and the OPAC.
 ## Why libraries choose it
 
 - **One click from the catalogue** — an **Attach Media** button on every record and an **Attach Media**
-  entry in every item's **Actions** menu.
+  entry for every item (in its **Actions** menu, or next to its **Edit** button).
 - **No extra passwords** — secure single sign-on with the staff member's Koha identity.
 - **Record and item level** — attach media to a title, or to one copy, even before it has a barcode.
 - **Visible where readers look** — record media as an online resource (MARC 856), item media in the

@@ -43,6 +43,15 @@ for my $case ([0,400,'zero'],['45x',400,'non-numeric'],[457,404,'deleted item'])
     ok(!@AuthorizeDB::inserts,"no initiation stored for $case->[2]");
 }
 {
+    like(run_authorize(scope=>'dashboard',biblionumber=>undef),qr{/sso/koha/start\?request=},'dashboard initiation without a record');
+    ok(!defined $AuthorizeDB::inserts[0][3],'dashboard initiation stores no record');
+    ok(!defined $AuthorizeDB::inserts[0][4],'dashboard initiation stores no item');
+    run_authorize(scope=>'dashboard',itemnumber=>456);
+    ok(!defined $AuthorizeDB::inserts[0][3] && !defined $AuthorizeDB::inserts[0][4],'dashboard initiation ignores record and item parameters');
+    is(run_authorize(scope=>'other',biblionumber=>undef),'','unknown scope still needs a record');
+    is($p->{error},400,'missing record rejected');
+}
+{
     local $Koha::Items::items{456}=999;
     is(run_authorize(itemnumber=>456),'','no redirect for an item of another record');
     is($p->{error},404,'item of another record rejected');

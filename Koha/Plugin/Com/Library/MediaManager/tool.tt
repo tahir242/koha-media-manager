@@ -15,8 +15,14 @@
 <p class="mm-lead">Staff open the MAM from the <em>Attach Media</em> button on any bibliographic record (it opens in a new tab).</p>
 
 <div class="mm-actions">
-    [% IF mam_url %]
-    <a class="btn btn-primary" href="[% mam_url | url %]/staff"><i class="fa fa-external-link" aria-hidden="true"></i> Go to MAM</a>
+    [% IF is_configured %]
+    [%# Signs in like Attach Media, without a record: the MAM opens on its dashboard, in a new tab. %]
+    <form method="post" action="/cgi-bin/koha/plugins/run.pl" target="_blank" rel="noopener">
+        <input type="hidden" name="class" value="[% CLASS | html %]"><input type="hidden" name="method" value="tool">
+        <input type="hidden" name="op" value="cud-authorize"><input type="hidden" name="scope" value="dashboard">
+        <input type="hidden" name="csrf_token" value="[% mm_form_csrf | html %]">
+        <button type="submit" class="btn btn-primary" title="Opens in a new tab"><i class="fa fa-external-link" aria-hidden="true"></i> Go to MAM<span class="sr-only visually-hidden"> (opens in a new tab)</span></button>
+    </form>
     [% END %]
     <a class="btn btn-default" href="/cgi-bin/koha/plugins/run.pl?class=[% CLASS | uri %]&amp;method=configure"><i class="fa fa-pencil" aria-hidden="true"></i> Configure</a>
     <form method="post" action="/cgi-bin/koha/plugins/run.pl">

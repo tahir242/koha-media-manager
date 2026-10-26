@@ -55,7 +55,8 @@ is($p->intranet_js,'','no item script outside the record and add/edit item pages
     like($js,qr/getElementById\('cat_additem'\)/,'script acts on the add item page');
     like($js,qr/ul\.dropdown-menu/,'entries go into the item Actions menu');
     like($js,qr/MutationObserver/,'rows drawn later by DataTables get their entry');
-    unlike($js,qr/cell\.appendChild/,'no separate button in each item row');
+    like($js,qr/btn btn-default btn-xs media-manager-item-action/,'button next to Edit when the holdings table has no menu');
+    like($js,qr/links\[i\]\.after\(' ',a\)/,'fallback button sits beside the Edit link');
     unlike($js,qr/media-manager-editing|heading\.appendChild/,'no button in the edit item heading');
     unlike($js,qr/<script>'|<\/script>"/,'label cannot break out of the script');
     like($js,qr/Upload \\u003cscript\\u003e/,'label JSON-escaped');

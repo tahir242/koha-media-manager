@@ -91,7 +91,7 @@ excluded by an explicit allowlist in every builder.
 | Hook / entry | Where | What it does |
 |---|---|---|
 | `intranet_catalog_biblio_enhancements_toolbar_button` | Record details toolbar | Renders the **Attach Media** form (POST + CSRF) when the plugin is ready, the transport is acceptable and the staff member has capabilities. Also re-registers newer hooks in `plugin_methods` (see below). |
-| `intranet_js` | `catalogue/detail.pl`, `cataloguing/additem.pl` only | Adds an **Attach Media** entry to each item's **Actions** dropdown. A `MutationObserver` covers holdings rows that DataTables draws or redraws later. Configuration is JSON-encoded and escaped for `<script>`. |
+| `intranet_js` | `catalogue/detail.pl`, `cataloguing/additem.pl` only | Adds an **Attach Media** entry to each item's **Actions** dropdown, or a button next to **Edit** where the row has no dropdown. A `MutationObserver` covers holdings rows that DataTables draws or redraws later. Configuration is JSON-encoded and escaped for `<script>`. |
 | `tool` | `plugins/run.pl?method=tool` | Dispatches `cud-authorize`, `continue`, `cud-complete`, `cud-test` and the dashboard. |
 | `configure` | `plugins/run.pl?method=configure` | Superlibrarian-only settings page. |
 | `api_namespace`, `api_routes` | `/api/v1/contrib/media-manager/…` | Registers the exchange route from `openapi.json`. |
@@ -107,8 +107,10 @@ loaded in the worker that handled the upload. A worker still running an older ve
 old method list. The toolbar hook (registered by every version) therefore re-registers any missing
 hooks once per worker.
 
-**Item entries** are keyed by each row's `op=edititem…itemnumber=N` link and are only added where
-Koha renders an Actions menu (i.e. for staff who can edit items).
+**Item entries** are keyed by each row's `op=edititem…itemnumber=N` link, so they appear only for staff
+who can edit items. Where the row has an Actions dropdown the entry is added to it; otherwise (the record
+page draws the dropdown only when `LocalCoverImages` or `OPACLocalCoverImages` is on) it becomes a small
+**Attach Media** button next to **Edit**.
 
 ## 4. Data model
 
@@ -216,6 +218,8 @@ X-Media-Secret: <64-character random secret>
 ```
 
 - All properties are required except `context.item_id`, which is `null` for a record-level sign-in.
+  `context.biblio_id` is `null` (and `item_id` too) for a sign-in from the dashboard's **Go to MAM**
+  (`cud-authorize` with `scope=dashboard`); the MAM then opens its own dashboard.
   IDs and timestamps are JSON integers; `identity.instance` equals `iss`; `aud` is `media-manager`.
 - `item_id`, when present, is an item of `biblio_id` — verified at initiation, completion and exchange.
 - No name, email, password, cookie, access token or invented login time is returned.
@@ -421,8 +425,9 @@ Two forked connections race to consume one code; exactly one succeeds. It skips 
    git push origin main --follow-tags
    ```
 
-A tag with a suffix (`v1.0.0-beta`, `v1.1.0-rc.1`) is published as a **pre-release**; the suffix is not part
-of `$VERSION`. The asset is named `koha-media-manager-<tag>.kpz`. If the changelog has no matching
+A plain or `-beta` tag (`v1.1.0`, `v1.1.0-beta`) becomes the **Latest** release, which the repository page
+shows with its download; `-alpha`, `-rc` and `-dev` tags (`v1.2.0-rc.1`) are published as **pre-releases**.
+The suffix is not part of `$VERSION`. The asset is named `koha-media-manager-<tag>.kpz`. If the changelog has no matching
 section, the release notes list the commits since the previous tag.
 
 ## 12. Deployment reference

@@ -1,5 +1,6 @@
 # Test every push and pull request, build the plugin package, and publish a GitHub Release with the
-# .kpz and its change log for every version tag (v1.2.3, or v1.2.3-beta / -rc.1 as a pre-release).
+# .kpz and its change log for every version tag
+# (v1.2.3 or v1.2.3-beta as the Latest release; -alpha, -rc and -dev tags as pre-releases).
 name: CI and release
 
 on:
@@ -26,7 +27,7 @@ jobs:
       - name: Install Perl dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libio-socket-ssl-perl libjson-perl liburi-perl
+          sudo apt-get install -y -qq libio-socket-ssl-perl libjson-perl liburi-perl libjson-validator-perl
 
       - name: Run the test suite
         run: prove t/*.t
@@ -78,7 +79,12 @@ jobs:
             exit 1
           fi
           echo "base=$base" >> "$GITHUB_OUTPUT"
-          if [ "$tag" != "$base" ]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+          # Beta is the public channel: a -beta tag becomes the Latest release, which the repository page
+          # shows with its download. Only -alpha, -rc and -dev tags are pre-releases.
+          case "$tag" in
+            *-alpha*|*-rc*|*-dev*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - name: Write the release notes
         run: |
@@ -110,11 +116,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           kpz="koha-media-manager-${GITHUB_REF_NAME}.kpz"
-          flags=""
-          if [ "${{ steps.version.outputs.prerelease }}" = true ]; then flags="--prerelease"; else flags="--latest"; fi
+          if [ "${{ steps.version.outputs.prerelease }}" = true ]; then flags="--prerelease"; else flags="--prerelease=false --latest"; fi
           if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
             gh release upload "${GITHUB_REF_NAME}" "$kpz" --clobber
-            gh release edit "${GITHUB_REF_NAME}" --notes-file notes.md
+            gh release edit "${GITHUB_REF_NAME}" --notes-file notes.md $flags
           else
             gh release create "${GITHUB_REF_NAME}" "$kpz" --title "Media Asset Management (MAM) for Koha ${GITHUB_REF_NAME}" --notes-file notes.md $flags
           fi

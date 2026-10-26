@@ -37,7 +37,7 @@ scanned books, PDFs, images, audio and video to a **bibliographic record** or to
 
 | | |
 |---|---|
-| **One-click access** | An **Attach Media** button on every record, and an **Attach Media** entry in every item's **Actions** menu. |
+| **One-click access** | An **Attach Media** button on every record, and an **Attach Media** entry for every item (in its **Actions** menu, or next to its **Edit** button). |
 | **Single sign-on** | Staff are signed in to the MAM automatically with their Koha identity. No extra accounts, no passwords to remember. |
 | **Record and item level** | Attach media to the whole title, or to one copy — even a copy that has no barcode yet. |
 | **Published into Koha** | Approved media appears in the staff interface and the OPAC: record media as an online resource (MARC 856), item media in the item's **URL** column (952$u). |
@@ -205,7 +205,8 @@ Finally, open the plugin's dashboard and press **Test connection**.
 ### Attach media to an item (a specific copy)
 
 1. On the record's **Holdings** table, open the item's **Actions** menu
-   (the small arrow next to **Edit**) and choose **Attach Media** — or, on **Edit items**
+   (the small arrow next to **Edit**) and choose **Attach Media**. If the item has only an **Edit**
+   button, click the **Attach Media** button next to it. Or, on **Edit items**
    (*Add/Edit item* page), open the item's **Actions** menu and choose **Attach Media**.
 2. The MAM opens on that item and shows **Item #&lt;number&gt;** with its barcode, copy number and
    call number when Koha has them. Files uploaded there belong to that item.
@@ -235,7 +236,8 @@ Tips:
 
 Open **Plugins → Media Asset Management (MAM) → Actions → Run tool** (superlibrarians only).
 
-- **Go to MAM** opens the MAM; **Configure** opens the settings.
+- **Go to MAM** signs you in to the MAM and opens its dashboard in a new tab (no record needed);
+  **Configure** opens the settings.
 - **Status** shows whether the plugin is configured, the Application URL, *Allow HTTP*, the last
   connection test and whether the plugin's tables are available.
 - **Test connection** checks that the MAM answers and advertises the expected protocol
@@ -307,7 +309,7 @@ if you want them gone.
 | Symptom | Cause and fix |
 |---|---|
 | No **Attach Media** button on a record | Plugin disabled or not configured; on plain HTTP *Allow HTTP* not ticked; the staff member lacks the [permissions](#7-who-can-use-it). |
-| No **Attach Media** in an item's Actions menu | Same causes as above; the item is not saved yet; the staff member cannot edit items (no Actions menu); after an upgrade, open any record once or restart Plack. |
+| No **Attach Media** in an item's Actions menu | Same causes as above; the item is not saved yet; the staff member cannot edit items (no Edit button or Actions menu); after an upgrade, open any record once or restart Plack. |
 | "Access denied" on `run.pl` | Koha requires the `plugins → tool` permission for any tool plugin. |
 | Old layout after an upgrade, or "No CSRF token passed" | Template cache not cleared or Plack not restarted. |
 | "Koha is opened over plain HTTP…" when saving | Tick *Allow HTTP* (test only) or use HTTPS. |

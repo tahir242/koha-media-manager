@@ -46,4 +46,12 @@ for my $file (qw(configure.tt tool.tt continue.tt)) {
         like($form,qr/name="op" value="cud-/,"$file preserves Koha's mutation convention");
     }
 }
+{
+    open my $fh,'<','Koha/Plugin/Com/Library/MediaManager/tool.tt' or die $!;
+    local $/;
+    my ($form)=<$fh> =~ m{(<form\b[^>]*>(?:(?!</form>)[\s\S])*name="scope" value="dashboard"[\s\S]*?</form>)};
+    ok($form,'"Go to MAM" is a sign-in form, not a plain link');
+    like($form,qr/target="_blank"/,'"Go to MAM" opens in a new tab');
+    like($form,qr/name="op" value="cud-authorize"/,'"Go to MAM" starts the regular sign-in');
+}
 done_testing;

@@ -17,13 +17,13 @@ use Koha::Plugin::Com::Library::MediaManager::Store;
 use Koha::Plugin::Com::Library::MediaManager::Health;
 
 # Numeric for Koha's version comparison; the release channel (beta) is carried by the Git tag.
-our $VERSION = '1.0.0';
+our $VERSION = '1.1.0';
 our $metadata = {
     name=>'Media Asset Management (MAM)', author=>'Tahir Ali Channa',
     description=>'Adds "Attach Media" to bibliographic records and to each item\'s Actions menu. One click signs '
         .'staff in to the Media Asset Management (MAM) application (no second password), where they upload, review and '
         .'publish media files for that record or item.',
-    date_authored=>'2026-10-21', date_updated=>'2026-10-24',
+    date_authored=>'2026-10-21', date_updated=>'2026-10-26',
     minimum_version=>'22.1100000', maximum_version=>undef, version=>$VERSION,
 };
 my @settings = qw(mam_url instance_id client_id code_ttl rotation_grace button_label staff_policy health_ips audit_retention);
@@ -81,7 +81,7 @@ sub _migrate {
     my $codes = $self->_table('codes');
     $dbh->do(qq{CREATE TABLE IF NOT EXISTS $codes (
         code_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
-        patron_id INT NOT NULL, biblio_id INT NOT NULL, item_id INT NULL, branch VARCHAR(10) NOT NULL,
+        patron_id INT NOT NULL, biblio_id INT NULL, item_id INT NULL, branch VARCHAR(10) NOT NULL,
         issuer VARCHAR(64) NOT NULL, audience VARCHAR(64) NOT NULL, client_id VARCHAR(64) NOT NULL,
         issued_at BIGINT NOT NULL, expires_at BIGINT NOT NULL, consumed_at BIGINT NULL,
         correlation_id CHAR(64) NOT NULL, browser_state VARCHAR(128) NOT NULL, INDEX mm_expiry (expires_at)
@@ -89,7 +89,7 @@ sub _migrate {
     my $requests = $self->_table('requests');
     $dbh->do(qq{CREATE TABLE IF NOT EXISTS $requests (
         request_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
-        session_hash CHAR(64) NOT NULL, patron_id INT NOT NULL, biblio_id INT NOT NULL, item_id INT NULL,
+        session_hash CHAR(64) NOT NULL, patron_id INT NOT NULL, biblio_id INT NULL, item_id INT NULL,
         branch VARCHAR(10) NOT NULL, binding CHAR(64) NOT NULL, expires_at BIGINT NOT NULL,
         consumed_at BIGINT NULL, correlation_id CHAR(64) NOT NULL, INDEX mm_request_expiry (expires_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin}) or die 'Initiation schema unavailable';
@@ -102,6 +102,8 @@ sub _migrate {
     $self->_add_column($log,'itemnumber','INT DEFAULT NULL AFTER biblionumber');
     $self->_add_column($codes,'item_id','INT NULL AFTER biblio_id');
     $self->_add_column($requests,'item_id','INT NULL AFTER biblio_id');
+    # Schema 4: dashboard sign-ins ("Go to MAM") carry no record.
+    $self->_allow_null($_,'biblio_id') for $codes,$requests;
     return $self->_defaults;
 }
 
@@ -116,6 +118,17 @@ sub _add_column {
     return 1;
 }
 
+sub _allow_null {
+    my ($self,$table,$column) = @_;
+    my $dbh = $self->_db;
+    my ($nullable) = $dbh->selectrow_array(
+        'SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND COLUMN_NAME=?',
+        undef,$table,$column);
+    return 1 if !defined($nullable) || $nullable eq 'YES';
+    $dbh->do("ALTER TABLE $table MODIFY COLUMN $column INT NULL") or die "Cannot change $table.$column";
+    return 1;
+}
+
 sub _defaults {
     my ($self) = @_;
     my %defaults = (
@@ -126,7 +139,7 @@ sub _defaults {
     for my $key (keys %defaults) {
         $self->store_data({$key=>$defaults{$key}}) unless defined $self->retrieve_data($key);
     }
-    $self->store_data({schema_version=>'3'}) unless ($self->retrieve_data('schema_version') // '') eq '3';
+    $self->store_data({schema_version=>'4'}) unless ($self->retrieve_data('schema_version') // '') eq '4';
     # Rename the old default label of earlier builds; a label chosen by the administrator is kept.
     $self->store_data({button_label=>'Attach Media'})
         if ($self->retrieve_data('button_label') // '') eq 'Upload Secure Media';
@@ -347,7 +360,8 @@ sub intranet_catalog_biblio_enhancements_toolbar_button {
 
 # Item-level "Attach Media". Koha has no item toolbar hook, so a small script adds an entry to each
 # item's Actions menu on the record page (holdings table, drawn by DataTables and redrawn on paging)
-# and on the add/edit item page.
+# and on the add/edit item page. When the holdings table has no menu (Koha draws one only with local
+# cover images enabled), the entry becomes a small button next to the item's Edit button.
 # Koha 26.05 passes {page => script name}; older releases pass nothing, so the environment is checked too.
 sub intranet_js {
     my ($self,$args) = @_;
@@ -392,11 +406,17 @@ function enhance(){
     var row=links[i].closest('tr');
     if(!n||!row||row.getAttribute('data-media-manager')===n)continue;
     var menu=row.querySelector('ul.dropdown-menu');
-    if(!menu)continue;
     row.setAttribute('data-media-manager',n);
-    var li=document.createElement('li');li.className='media-manager-item-action';
-    var a=document.createElement('a');a.className='dropdown-item';a.href='#';a.setAttribute('role','button');
-    content(a,n);li.appendChild(a);menu.appendChild(li);
+    var a=document.createElement('a');a.href='#';a.setAttribute('role','button');
+    content(a,n);
+    if(menu){
+      var li=document.createElement('li');li.className='media-manager-item-action';
+      a.className='dropdown-item';li.appendChild(a);menu.appendChild(li);
+    }else{
+      // Without LocalCoverImages/OPACLocalCoverImages the record page shows a plain Edit button, no menu.
+      a.className='btn btn-default btn-xs media-manager-item-action';
+      links[i].after(' ',a);
+    }
   }
 }
 enhance();
@@ -466,17 +486,21 @@ sub _authorize {
         return $self->_error('Access denied','Required staff permissions are missing.',403);
     }
     return $self->_error('Too many requests','Try again in one minute.',429) unless $self->_rate('staff:'.$p->borrowernumber,20);
-    my $id = scalar $cgi->param('biblionumber');
-    return $self->_error('Invalid record','Choose an existing bibliographic record.',400) unless valid_id($id);
-    return $self->_error('Record unavailable','This bibliographic record is unavailable.',404) unless Koha::Biblios->find($id);
-    $ctx->{biblio_id} = 0+$id;
-    my $item_id = scalar $cgi->param('itemnumber');
-    if (defined($item_id) && length($item_id)) {
-        return $self->_error('Invalid item','Choose an existing item.',400) unless valid_id($item_id);
-        return $self->_error('Item unavailable','This item is unavailable or belongs to another record.',404)
-            unless _item_of($item_id,$id);
-        $ctx->{item_id} = 0+$item_id;
-    } else { $item_id = undef; }
+    # "Go to MAM" on the dashboard signs in without a record; the MAM then opens on its own dashboard.
+    my ($id,$item_id);
+    unless ((scalar($cgi->param('scope')) // '') eq 'dashboard') {
+        $id = scalar $cgi->param('biblionumber');
+        return $self->_error('Invalid record','Choose an existing bibliographic record.',400) unless valid_id($id);
+        return $self->_error('Record unavailable','This bibliographic record is unavailable.',404) unless Koha::Biblios->find($id);
+        $ctx->{biblio_id} = 0+$id;
+        $item_id = scalar $cgi->param('itemnumber');
+        if (defined($item_id) && length($item_id)) {
+            return $self->_error('Invalid item','Choose an existing item.',400) unless valid_id($item_id);
+            return $self->_error('Item unavailable','This item is unavailable or belongs to another record.',404)
+                unless _item_of($item_id,$id);
+            $ctx->{item_id} = 0+$item_id;
+        } else { $item_id = undef; }
+    }
     my $cfg = $self->_config;
     my $request = random_hex();
     my $dbh = $self->_db;
@@ -497,6 +521,14 @@ sub _item_of {
     my $item = Koha::Items->find($item_id);
     return unless $item && $item->biblionumber == $biblio_id;
     return $item;
+}
+
+# The record (and item) of a sign-in still exist; a dashboard sign-in has neither.
+sub _context_ok {
+    my ($row) = @_;
+    return !defined($row->{item_id}) unless defined $row->{biblio_id};
+    return Koha::Biblios->find($row->{biblio_id})
+        && (!defined($row->{item_id}) || _item_of($row->{item_id},$row->{biblio_id}));
 }
 
 sub _binding {
@@ -543,8 +575,7 @@ sub _complete {
             && $row->{expires_at} > $row->{now_epoch}
             && $row->{session_hash} eq sha256_hex(scalar $cgi->cookie('CGISESSID'))
             && $row->{patron_id} == $p->borrowernumber && $row->{binding} eq _binding($cfg)
-            && Koha::Biblios->find($row->{biblio_id})
-            && (!defined($row->{item_id}) || _item_of($row->{item_id},$row->{biblio_id}));
+            && _context_ok($row);
         $dbh->do("UPDATE $table SET consumed_at=UNIX_TIMESTAMP() WHERE request_hash=?",undef,sha256_hex($request))
             or die 'Cannot consume initiation';
         $self->_store->issue($code,{
@@ -601,15 +632,14 @@ sub exchange {
         sub {
             my ($row) = @_;
             my $p = $self->_patron($row->{patron_id});
-            return unless $p && Koha::Biblios->find($row->{biblio_id});
-            return if defined($row->{item_id}) && !_item_of($row->{item_id},$row->{biblio_id});
+            return unless $p && _context_ok($row);
             $ctx->{userid} = $p->userid;
             my $caps = $self->_capabilities($p);
             return unless @$caps;
             return {
                 success=>JSON::PP::true, protocol=>'code-v2', iss=>$row->{issuer}, aud=>$row->{audience},
                 identity=>{provider=>'koha',instance=>$row->{issuer},patron_id=>0+$p->borrowernumber,userid=>$p->userid},
-                context=>{biblio_id=>0+$row->{biblio_id},branch=>$row->{branch},
+                context=>{biblio_id=>defined($row->{biblio_id}) ? 0+$row->{biblio_id} : undef,branch=>$row->{branch},
                     item_id=>defined($row->{item_id}) ? 0+$row->{item_id} : undef},
                 capabilities=>$caps,issued_at=>0+$row->{issued_at},expires_at=>0+$row->{expires_at},
                 correlation_id=>$row->{correlation_id},state=>$row->{browser_state},

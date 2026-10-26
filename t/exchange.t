@@ -11,9 +11,10 @@ use Koha::Plugin::Com::Library::MediaManager::Security qw(secret_hash);
     package Grant;
     our $status='success';
     our $item_id;
+    our $biblio_id=123;
     sub consume {
         my ($s,$code,$binding,$authorize,$audit)=@_;
-        my $row={patron_id=>7,biblio_id=>123,item_id=>$item_id,branch=>'MAIN',issuer=>'library',
+        my $row={patron_id=>7,biblio_id=>$biblio_id,item_id=>$item_id,branch=>'MAIN',issuer=>'library',
             audience=>'media-manager',client_id=>'dam',issued_at=>990,expires_at=>1050,correlation_id=>'correlation'};
         my $response=$status eq 'success' ? $authorize->($row) : undef;
         my $result=($status eq 'success' && !$response) ? 'permission_denied' : $status;
@@ -57,6 +58,16 @@ like(JSON::PP::encode_json($body->{context}),qr/"item_id":null/,'null item seria
     local $Koha::Items::items{456}=999;
     ($status)=$p->exchange($request,'dam','a' x 64,'192.0.2.1');
     is($status,403,'item moved to another record revalidated at exchange');
+}
+{
+    local $Grant::biblio_id;
+    ($status,$body)=$p->exchange($request,'dam','a' x 64,'192.0.2.1');
+    is($status,200,'dashboard grant without a record');
+    like(JSON::PP::encode_json($body->{context}),qr/"biblio_id":null/,'dashboard grant has a null record');
+    ok(!defined $body->{context}{item_id},'dashboard grant has no item');
+    local $Grant::item_id=456;
+    ($status)=$p->exchange($request,'dam','a' x 64,'192.0.2.1');
+    is($status,403,'an item without its record is rejected');
 }
 {
     ($status,$body)=$p->exchange({%$request,item_id=>456},'dam','a' x 64,'192.0.2.1');

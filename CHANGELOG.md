@@ -7,10 +7,10 @@ tagged version as the GitHub release notes.
 
 Companion application: [koha-mam](https://github.com/tahir242/koha-mam).
 
-## [Unreleased]
+## [1.1.0] - 2026-10-26
 
-Version 1.1.0. **Go to MAM** needs a MAM release newer than 1.0.0 (it must accept sign-ins without a record);
-record and item sign-ins work with any MAM.
+**Go to MAM** needs MAM 1.1.0 or later (it must accept sign-ins without a record); record and item
+sign-ins work with any MAM.
 
 ### Changed
 
@@ -21,6 +21,7 @@ record and item sign-ins work with any MAM.
   automatically on upgrade.
 - Releases: `-beta` tags are published as the **Latest** release, so the repository page shows the `.kpz`.
   Only `-alpha`, `-rc` and `-dev` tags are pre-releases.
+- Exchange response schema (`openapi.json`): `context.biblio_id` may be `null` (dashboard sign-ins).
 
 ### Fixed
 

@@ -7,7 +7,7 @@
 ![Koha](https://img.shields.io/badge/Koha-22.11%E2%80%9326.05-1f6feb)
 ![Status](https://img.shields.io/badge/status-beta-orange)
 
-**Version 1.0.0 (beta)** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
+**Version 1.1.0 (beta)** · Koha 26.05 (minimum 22.11) · Author: Tahir Ali Channa
 
 ---
 
@@ -47,7 +47,7 @@ viewing, and once approved it appears in the staff interface and the OPAC.
 
 ## Quick start
 
-1. **Download** `koha-media-manager-v1.0.0-beta.kpz` from
+1. **Download** `koha-media-manager-v1.1.0-beta.kpz` from
    [Releases](https://github.com/tahir242/koha-media-manager/releases).
 2. **Install** it in Koha: *Administration → Plugins → Upload plugin*, then restart Plack and clear the
    template cache.
